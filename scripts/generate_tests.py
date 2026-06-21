@@ -71,7 +71,7 @@ def main():
     test_resp = client.messages.create(
         model="claude-opus-4-8",
         max_tokens=4096,
-        messages=[{"role": "user", "content": build_test_script_prompt(story, feature_text)}],
+        messages=[{"role": "user", "content": build_test_script_prompt(story, feature_text, feature_path.name)}],
     )
     _test_block = next((block.text for block in test_resp.content if block.type == "text"), None)
     if _test_block is None:

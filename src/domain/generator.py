@@ -34,6 +34,7 @@ write a pytest-bdd test script that implements every step in the feature file.
 
 Rules:
 - Use `pytest_bdd` fixtures: `scenarios`, `given`, `when`, `then`.
+- The feature file is named exactly `{feature_filename}` — use that exact name in `scenarios()`.
 - Target the Next.js API route at BASE_URL (read from env, default http://localhost:3000).
 - Use `httpx` for HTTP calls.
 - Implement every step — no `pass` placeholders.
@@ -78,7 +79,7 @@ def build_feature_prompt(story: Story, diff: str) -> str:
     )
 
 
-def build_test_script_prompt(story: Story, feature_text: str) -> str:
+def build_test_script_prompt(story: Story, feature_text: str, feature_filename: str = "") -> str:
     """Return the prompt to send to the model for test-script generation.
 
     Unknown test_type values silently default to the Playwright template — no error is raised.
@@ -90,6 +91,7 @@ def build_test_script_prompt(story: Story, feature_text: str) -> str:
         return PYTEST_BDD_PROMPT_TEMPLATE.format(
             feature=feature_text,
             description=story.description,
+            feature_filename=feature_filename or f"{story.id}.feature",
         )
     # story.test_type == "playwright" — only two valid variants; unknown types also land here
     return PLAYWRIGHT_PROMPT_TEMPLATE.format(
