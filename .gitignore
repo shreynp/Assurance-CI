@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.pytest_cache/
+.playwright/
+generated/*/
+traceability/reports/
+*.egg-info/
+dist/
+.DS_Store

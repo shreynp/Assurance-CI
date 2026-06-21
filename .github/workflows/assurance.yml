@@ -1,0 +1,152 @@
+name: Assurance CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  assurance:
+    name: Generate → Run → Record
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need parent commit for diff
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]" 2>/dev/null || pip install \
+            anthropic pytest pytest-bdd playwright pytest-playwright \
+            streamlit python-dotenv pydantic
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      - name: Extract story ID from commit
+        id: story
+        run: |
+          python - <<'EOF'
+          import sys, os
+          sys.path.insert(0, ".")
+          from src.domain.commit_parser import extract_story_id
+          msg = os.environ.get("COMMIT_MSG", "")
+          sid = extract_story_id(msg)
+          print(f"story_id={sid or ''}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"story_id={sid or ''}\n")
+              f.write(f"has_story={'true' if sid else 'false'}\n")
+          EOF
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+
+      - name: Skip — no story ID
+        if: steps.story.outputs.has_story == 'false'
+        run: |
+          echo "No story ID in commit message — skipping assurance pipeline."
+          exit 0
+
+      - name: Get code diff
+        if: steps.story.outputs.has_story == 'true'
+        id: diff
+        run: |
+          git diff HEAD~1 HEAD -- . > /tmp/commit.diff
+          echo "Diff written to /tmp/commit.diff ($(wc -l < /tmp/commit.diff) lines)"
+
+      - name: Generate feature file + test script
+        if: steps.story.outputs.has_story == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STORY_ID: ${{ steps.story.outputs.story_id }}
+        run: |
+          python scripts/generate_tests.py \
+            --story-id "$STORY_ID" \
+            --diff /tmp/commit.diff \
+            --out generated/
+
+      - name: Run generated tests
+        if: steps.story.outputs.has_story == 'true'
+        id: test_run
+        continue-on-error: true   # always write report even on failure
+        env:
+          STORY_ID: ${{ steps.story.outputs.story_id }}
+        run: |
+          python scripts/run_tests.py \
+            --story-id "$STORY_ID" \
+            --generated-dir generated/ \
+            --report-out traceability/reports/
+
+      - name: Append traceability record
+        if: steps.story.outputs.has_story == 'true'
+        env:
+          STORY_ID: ${{ steps.story.outputs.story_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+        run: |
+          python scripts/append_record.py \
+            --story-id "$STORY_ID" \
+            --commit-sha "$COMMIT_SHA" \
+            --author "$COMMIT_AUTHOR" \
+            --generated-dir generated/ \
+            --report-dir traceability/reports/ \
+            --register traceability/register.json
+
+      - name: Render REGISTER.md
+        if: steps.story.outputs.has_story == 'true'
+        run: python scripts/render_register.py --register traceability/register.json
+
+      - name: Commit traceability artifacts
+        if: steps.story.outputs.has_story == 'true'
+        run: |
+          git config user.name "Assurance CI"
+          git config user.email "ci@assurance"
+          git add traceability/ generated/
+          git diff --cached --quiet || git commit -m "chore(assurance): record run for ${{ steps.story.outputs.story_id }} @ ${{ github.sha }}"
+          git push
+
+      - name: Write gate outcome
+        if: steps.story.outputs.has_story == 'true'
+        run: |
+          python scripts/resolve_gate.py \
+            --register traceability/register.json \
+            --story-id ${{ steps.story.outputs.story_id }} \
+            --commit-sha ${{ github.sha }} \
+            --output /tmp/gate.json
+          cat /tmp/gate.json
+
+      - name: Upload gate result
+        if: steps.story.outputs.has_story == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-result
+          path: /tmp/gate.json
+
+  gate:
+    name: Deploy gate
+    needs: assurance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: gate-result
+          path: /tmp/
+
+      - name: Evaluate gate
+        run: |
+          python - <<'EOF'
+          import json, sys
+          try:
+              gate = json.load(open("/tmp/gate.json"))
+          except FileNotFoundError:
+              print("No gate result — no story ID was present, gate passes.")
+              sys.exit(0)
+          status = gate.get("status", "red")
+          print(f"Gate: {status.upper()} — {gate.get('reason','')}")
+          sys.exit(0 if status == "green" else 1)
+          EOF
