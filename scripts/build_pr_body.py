@@ -18,6 +18,13 @@ from pathlib import Path
 
 
 def main():
+    """
+    Build a markdown PR body from gate.json and the execution report.
+
+    When the report JSON is absent the counts silently default to 0/0 (no error raised).
+    The output file is always overwritten. JIRA_DATA_URL being absent produces a plain
+    story-ID reference instead of a hyperlink.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--story-id", required=True)
     parser.add_argument("--gate", required=True)

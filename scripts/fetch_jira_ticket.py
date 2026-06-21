@@ -12,11 +12,21 @@ Usage:
 """
 import argparse
 import os
+import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 
 def main():
+    """
+    Fetch a story markdown file from JIRA_DATA_URL and write it to <jira-dir>/<story-id>.md.
+
+    Error modes:
+      KeyError       — JIRA_DATA_URL env var not set
+      HTTP 404       — story file not found at the remote URL (exits 1 with clear message)
+      URLError       — network failure or DNS error (exits 1 with clear message)
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--story-id", required=True)
     parser.add_argument("--jira-dir", default="jira")
@@ -27,8 +37,15 @@ def main():
 
     print(f"Fetching {args.story_id} from {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "assurance-ci/1.0"})
-    with urllib.request.urlopen(req) as resp:
-        content = resp.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            content = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        print(f"ERROR: HTTP {exc.code} fetching {args.story_id} from {url}")
+        sys.exit(1)
+    except urllib.error.URLError as exc:
+        print(f"ERROR: Network error fetching {args.story_id}: {exc.reason}")
+        sys.exit(1)
 
     jira_dir = Path(args.jira_dir)
     jira_dir.mkdir(parents=True, exist_ok=True)

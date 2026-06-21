@@ -9,6 +9,11 @@ from src.domain.register import render_markdown
 
 
 def main():
+    """
+    Render register.json → REGISTER.md, always written as a sibling of the register file.
+
+    Raises json.JSONDecodeError uncaught when the register file contains malformed JSON.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--register", required=True)
     args = parser.parse_args()

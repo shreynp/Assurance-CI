@@ -2,10 +2,11 @@
 from __future__ import annotations
 import re
 
-# Matches PROJECT-NNN story IDs (e.g. "PROT-101", "ABC-9").
+# Matches PROT-NNN story IDs only (e.g. "PROT-101", "PROT-202").
+# Anchored to PROT to avoid false matches on tokens like UTF-8, HTTP-2, SHA-256.
 # Examples that match: "PROT-101: fix", "fix PROT-202 slider"
-# Examples that don't match: "prot-101" (lowercase), "PROT-" (no number)
-STORY_ID_PATTERN = re.compile(r"\b([A-Z]+-\d+)\b")
+# Examples that don't match: "prot-101" (lowercase), "PROT-" (no number), "UTF-8"
+STORY_ID_PATTERN = re.compile(r"\b(PROT-\d+)\b")
 
 
 def extract_story_id(commit_message: str) -> str | None:

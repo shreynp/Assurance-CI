@@ -44,6 +44,17 @@ def parse_counts(output: str) -> tuple[int, int]:
 
 
 def main():
+    """
+    Run the generated test script and write an execution report JSON.
+
+    Implicit env-var inputs (read from environment, not CLI args):
+      GITHUB_SHA    — commit SHA recorded in the report (default: 'local')
+      GITHUB_ACTOR  — author name recorded in the report (default: $USER or 'unknown')
+      RUNNER_OS     — environment string recorded in the report (default: 'local')
+
+    Exits with the pytest return code so the CI step is marked failed when tests fail.
+    Report output is truncated to 4 000 chars for register storage; full output is printed above.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--story-id", required=True)
     parser.add_argument("--generated-dir", required=True)

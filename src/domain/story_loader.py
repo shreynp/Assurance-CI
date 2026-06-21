@@ -4,14 +4,19 @@ import re
 from .models import Story
 
 
+# Normalises the case-insensitive regex capture to canonical Literal values
 _TEST_TYPE_MAP = {
     "pytest-bdd": "pytest-bdd",
     "playwright": "playwright",
 }
 
+# Matches: "- AC1: The endpoint returns 201"
 _AC_PATTERN = re.compile(r"^-\s+AC\d+:\s+(.+)$", re.MULTILINE)
+# Matches: "# PROT-101 — Add assessment submission endpoint"
 _TITLE_PATTERN = re.compile(r"^#\s+\S+\s+—\s+(.+)$", re.MULTILINE)
+# Matches: "**Test type**: pytest-bdd"  or  "**Test type**: Playwright"
 _TEST_TYPE_PATTERN = re.compile(r"\*\*Test type\*\*:\s+(pytest-bdd|Playwright)", re.IGNORECASE)
+# Matches the Description section body up to the next ## heading
 _DESC_PATTERN = re.compile(r"## Description\n(.+?)(?=\n##)", re.DOTALL)
 
 

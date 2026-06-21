@@ -1,0 +1,90 @@
+[
+  {
+    "story_id": "PROT-101",
+    "commit_sha": "a7f3c2d8e9b1045c3f2a8d7e6b5c4a3f2e1d0c9b",
+    "author": "shreyas.jagannath@newpage.io",
+    "feature_file_path": "generated/PROT-101_a7f3c2d/test_cases.feature",
+    "test_script_path": "generated/PROT-101_a7f3c2d/test_api.py",
+    "execution_report": {
+      "story_id": "PROT-101",
+      "commit_sha": "a7f3c2d8e9b1045c3f2a8d7e6b5c4a3f2e1d0c9b",
+      "author": "shreyas.jagannath@newpage.io",
+      "passed": 4,
+      "failed": 0,
+      "environment": "ubuntu-latest",
+      "timestamp": "2026-06-21T08:14:22Z",
+      "output": "=== Assurance CI — Execution Report ===\nStory:       PROT-101\nCommit:      a7f3c2d\nEnvironment: ubuntu-latest\nAuthor:      shreyas.jagannath@newpage.io\n\n4 passed in 1.23s\n\n  ✓ POST /api/assessments accepts valid submission with selfScore 1-5\n  ✓ Response includes assessment ID and submission timestamp\n  ✓ Returns 400 when selfScore is outside 1-5 range\n  ✓ Returns 400 when element is not a recognised element name"
+    },
+    "gate_result": {
+      "status": "green",
+      "reason": "All 4 scenario(s) passed"
+    },
+    "appended_at": "2026-06-21T08:15:01Z"
+  },
+  {
+    "story_id": "PROT-102",
+    "commit_sha": "b8e4f1c7d2a305c8f9b6e3d7a4c2f1e8d3b5a7c6",
+    "author": "shreyas.jagannath@newpage.io",
+    "feature_file_path": "generated/PROT-102_b8e4f1c/test_cases.feature",
+    "test_script_path": "generated/PROT-102_b8e4f1c/test_ui.py",
+    "execution_report": {
+      "story_id": "PROT-102",
+      "commit_sha": "b8e4f1c7d2a305c8f9b6e3d7a4c2f1e8d3b5a7c6",
+      "author": "shreyas.jagannath@newpage.io",
+      "passed": 2,
+      "failed": 1,
+      "environment": "ubuntu-latest",
+      "timestamp": "2026-06-21T09:31:44Z",
+      "output": "=== Assurance CI — Execution Report ===\nStory:       PROT-102\nCommit:      b8e4f1c\nEnvironment: ubuntu-latest\nAuthor:      shreyas.jagannath@newpage.io\n\n2 passed, 1 failed in 3.87s\n\n  ✓ Slider replaces numeric input on /assessment page\n  ✓ Slider is visible and usable on 1280x800 viewport\n  ✗ FAILED: Dragging the slider updates the displayed score value in real time\n      AssertionError: Expected score display to update to '3', got '1'\n      Screenshot: generated/PROT-102_b8e4f1c/failure_screenshot.png"
+    },
+    "gate_result": {
+      "status": "red",
+      "reason": "1 scenario(s) failed out of 3"
+    },
+    "appended_at": "2026-06-21T09:32:15Z"
+  },
+  {
+    "story_id": "PROT-102",
+    "commit_sha": "c9d5e2a1f3b406c0e7d8f4a1b2c9d6e5f4a3b2c1",
+    "author": "shreyas.jagannath@newpage.io",
+    "feature_file_path": "generated/PROT-102_c9d5e2a/test_cases.feature",
+    "test_script_path": "generated/PROT-102_c9d5e2a/test_ui.py",
+    "execution_report": {
+      "story_id": "PROT-102",
+      "commit_sha": "c9d5e2a1f3b406c0e7d8f4a1b2c9d6e5f4a3b2c1",
+      "author": "shreyas.jagannath@newpage.io",
+      "passed": 3,
+      "failed": 0,
+      "environment": "ubuntu-latest",
+      "timestamp": "2026-06-21T11:05:33Z",
+      "output": "=== Assurance CI — Execution Report ===\nStory:       PROT-102\nCommit:      c9d5e2a\nEnvironment: ubuntu-latest\nAuthor:      shreyas.jagannath@newpage.io\n\n3 passed in 3.12s\n\n  ✓ Slider replaces numeric input on /assessment page\n  ✓ Dragging the slider updates the displayed score value in real time\n  ✓ Slider is visible and usable on 1280x800 viewport"
+    },
+    "gate_result": {
+      "status": "green",
+      "reason": "All 3 scenario(s) passed"
+    },
+    "appended_at": "2026-06-21T11:06:02Z"
+  },
+  {
+    "story_id": "PROT-103",
+    "commit_sha": "d1e6f3b2a4c507d1e8f5b2a3c7d4e1f6b3a5c2d8",
+    "author": "shreyas.jagannath@newpage.io",
+    "feature_file_path": "generated/PROT-103_d1e6f3b/test_cases.feature",
+    "test_script_path": "generated/PROT-103_d1e6f3b/test_ui.py",
+    "execution_report": {
+      "story_id": "PROT-103",
+      "commit_sha": "d1e6f3b2a4c507d1e8f5b2a3c7d4e1f6b3a5c2d8",
+      "author": "shreyas.jagannath@newpage.io",
+      "passed": 3,
+      "failed": 0,
+      "environment": "ubuntu-latest",
+      "timestamp": "2026-06-21T13:22:51Z",
+      "output": "=== Assurance CI — Execution Report ===\nStory:       PROT-103\nCommit:      d1e6f3b\nEnvironment: ubuntu-latest\nAuthor:      shreyas.jagannath@newpage.io\n\n3 passed in 2.44s\n\n  ✓ Delta Flags section appears below the spider chart on /triangulated\n  ✓ Each flagged element shows: name, self score, AI score, gap\n  ✓ Section shows 'No significant gaps detected' when no delta flags exist"
+    },
+    "gate_result": {
+      "status": "green",
+      "reason": "All 3 scenario(s) passed"
+    },
+    "appended_at": "2026-06-21T13:23:14Z"
+  }
+]

@@ -17,7 +17,12 @@ def append_record(record: TraceabilityRecord, register_path: Path) -> None:
 
 
 def render_markdown(register_path: Path) -> str:
-    """Render the register as a markdown table for human review."""
+    """Render the register as a 5-column markdown table (Story, Commit, Author, Result, Date).
+
+    Commit SHA is truncated to 7 characters. Status icon is ✅ for green, ❌ for red.
+    Returns a placeholder string when the file is absent or contains an empty list —
+    the caller will see '_No traceability records yet._'.
+    """
     if not register_path.exists():
         return "_No traceability records yet._\n"
 
@@ -44,5 +49,5 @@ def render_markdown(register_path: Path) -> str:
 
 
 def _serialise(record: TraceabilityRecord) -> dict:
-    # asdict recurses into nested dataclasses; result is a fully-serialisable plain dict
+    """Serialise a TraceabilityRecord to a plain dict. asdict recurses into nested dataclasses."""
     return asdict(record)

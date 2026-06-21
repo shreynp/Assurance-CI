@@ -189,6 +189,8 @@ st.markdown(_CSS, unsafe_allow_html=True)
 
 # ─── Data loading ────────────────────────────────────────────────────────────
 
+# Resolves to <repo-root>/traceability/register.json when launched via
+# `streamlit run src/dashboard/app.py` from the Assurance-CI repo root.
 REGISTER_PATH = Path(__file__).parent.parent.parent / "traceability" / "register.json"
 
 

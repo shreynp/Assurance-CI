@@ -79,7 +79,13 @@ def build_feature_prompt(story: Story, diff: str) -> str:
 
 
 def build_test_script_prompt(story: Story, feature_text: str) -> str:
-    """Return the prompt to send to the model for test-script generation."""
+    """Return the prompt to send to the model for test-script generation.
+
+    Unknown test_type values silently default to the Playwright template — no error is raised.
+    Prompt assumptions baked into the templates:
+      pytest-bdd: uses httpx for HTTP calls, BASE_URL env var, no pass placeholders
+      playwright:  uses sync_api, TARGET_URL env var, 1280×800 viewport
+    """
     if story.test_type == "pytest-bdd":
         return PYTEST_BDD_PROMPT_TEMPLATE.format(
             feature=feature_text,

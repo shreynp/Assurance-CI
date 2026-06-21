@@ -17,7 +17,10 @@ class Story:
 
 @dataclass(frozen=True)
 class Commit:
-    """A git commit with its associated diff and optional story reference."""
+    """A git commit with its associated diff and optional story reference.
+
+    Defined for future use (Phase 1 batch processing); not used by the current pipeline.
+    """
 
     sha: str
     author: str
@@ -75,6 +78,13 @@ class GateResult:
 
     @classmethod
     def from_report(cls, report: ExecutionReport) -> "GateResult":
+        """
+        Derive a gate decision from an ExecutionReport.
+
+        Red-gate triggers:
+          1. report.all_passed is False (zero passed, or any failed — see ExecutionReport.all_passed)
+          2. Zero passed with zero failed counts as red — an empty run cannot be evidence of passing.
+        """
         if report.all_passed:
             return cls(status="green", reason=f"All {report.passed} scenario(s) passed")
         return cls(

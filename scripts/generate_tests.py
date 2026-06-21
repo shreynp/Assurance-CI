@@ -51,9 +51,11 @@ def main():
             "content": build_feature_prompt(story, diff_text),
         }],
     )
-    feature_text = strip_fences(
-        next(block.text for block in feature_resp.content if block.type == "text").strip()
-    )
+    _feature_block = next((block.text for block in feature_resp.content if block.type == "text"), None)
+    if _feature_block is None:
+        print("ERROR: Claude returned no text block for feature generation — aborting")
+        sys.exit(1)
+    feature_text = strip_fences(_feature_block.strip())
     feature_path = out_dir / f"{args.story_id}.feature"
     feature_path.write_text(feature_text)
     print(f"  Written: {feature_path}")
@@ -71,9 +73,11 @@ def main():
         max_tokens=4096,
         messages=[{"role": "user", "content": build_test_script_prompt(story, feature_text)}],
     )
-    test_text = strip_fences(
-        next(block.text for block in test_resp.content if block.type == "text").strip()
-    )
+    _test_block = next((block.text for block in test_resp.content if block.type == "text"), None)
+    if _test_block is None:
+        print("ERROR: Claude returned no text block for test script generation — aborting")
+        sys.exit(1)
+    test_text = strip_fences(_test_block.strip())
     test_path = out_dir / test_filename
     test_path.write_text(test_text)
     print(f"  Written: {test_path}")
