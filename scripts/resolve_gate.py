@@ -11,6 +11,9 @@ def main():
 
     Exits 0 if the latest gate for story+commit is green, exits 1 if red or
     if no matching record exists.
+
+    When multiple records share the same story_id + commit_sha, the last
+    (most recently appended) record is used.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--register", required=True)

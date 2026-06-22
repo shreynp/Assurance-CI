@@ -1,0 +1,27 @@
+# Assurance CI
+
+> Story-to-gate traceability pipeline. Claude generates BDD tests from Jira story commits; tests run in CI; results logged to a traceability register; viewable in a Streamlit dashboard.
+
+## Documentation
+
+- [README](Readme.md): Project overview, CI secrets, local setup
+- [PROGRESS](PROGRESS.md): Current state, session log, demo script
+- [DOMAIN](DOMAIN.md): Domain model — entities, aggregates, language
+- [SPEC](SPEC.md): Feature specifications and acceptance criteria
+- [CONTRIBUTING](CONTRIBUTING.md): Coding patterns and layer rules
+- [Architecture Decisions](docs/adr/README.md): ADR index
+- [Research Notes](docs/research/INDEX.md): Library research and security assessments
+- [Traceability Register](traceability/REGISTER.md): Current test results by story
+- [Demo Backlog](docs/DEMO_BACKLOG.md): All 23 demo stories
+
+## Source Layout
+
+- `src/domain/` — pure domain functions (no I/O)
+- `src/dashboard/app.py` — Streamlit dashboard
+- `scripts/` — I/O scripts (Claude API, file reads/writes, register updates)
+- `tests/` — pytest-bdd features, step defs, unit tests
+- `traceability/` — register.json, REGISTER.md, execution reports
+- `jira/` — Jira story markdown files (PROT-101 through PROT-123)
+- `.github/workflows/assurance.yml` — CI pipeline definition
+- `.claude/agents/` — subagent definitions
+- `.claude/skills/` — on-demand skill files

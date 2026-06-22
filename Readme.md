@@ -5,31 +5,55 @@ Story → Commit → Generated Tests → Execution → Gate traceability pipelin
 ## How it works
 
 1. A commit message containing a story ID (e.g. `PROT-101: add endpoint`) triggers the pipeline.
-2. The story markdown is fetched from the Jira data source.
+2. The story markdown is fetched from the `jira/` directory.
 3. Claude generates a Gherkin feature file and a pytest-bdd or Playwright test script.
-4. Tests run against the Next.js dev server.
+4. Tests are executed by pytest, targeting `BASE_URL` / `TARGET_URL` (default: `http://localhost:3000`).
 5. Results are appended to `traceability/register.json`.
 6. The gate job exits 0 (green / allow merge) or 1 (red / block merge).
 
 ## Traceability dashboard
 
-The traceability register is embedded into the PROTECT AI dashboard and deployed to Cloudflare on every push to `main`.
+The traceability register can be browsed locally using the Streamlit dashboard.
 
-Live URL: https://protect.shreyas-jagannath.workers.dev/assurance
-
-The `/assurance` route shows:
+The dashboard shows:
 - KPI cards — total runs, green/red gates, stories covered
 - Filterable register table — filter by story ID or gate status, click a row to inspect it
 - Execution detail — story, commit SHA, gate verdict, file paths, full test output
 
 ## Local Streamlit viewer
 
-To browse the register locally using the Streamlit dashboard:
+To browse the register locally:
 
 ```bash
-cd /path/to/protect
-.venv/bin/streamlit run assurance/src/dashboard/app.py
+.venv/bin/streamlit run src/dashboard/app.py
 ```
+
+## Script pipeline contracts
+
+The pipeline scripts hand off data through intermediate files:
+
+```
+generate_tests.py  ──►  <out>/<story-id>/meta.json          (feature_file, test_script paths)
+run_tests.py       ──►  <report-dir>/<story-id>_report.json  (passed, failed, output)
+append_record.py   ──►  traceability/register.json           (full traceability record)
+resolve_gate.py    ──►  gate.json                            (status: green | red)
+```
+
+**Env vars consumed by the pipeline:**
+
+| Script | Variable | Default | Purpose |
+|--------|----------|---------|---------|
+| `generate_tests.py` | `ANTHROPIC_API_KEY` | *(required)* | Claude API — test generation |
+| `run_tests.py` | `GITHUB_SHA` | `local` | Commit SHA recorded in report |
+| `run_tests.py` | `GITHUB_ACTOR` | `$USER` | Author recorded in report |
+| `run_tests.py` | `RUNNER_OS` | `local` | Environment string |
+| `build_pr_body.py` | `JIRA_DATA_URL` | *(optional)* | Renders ticket ID as hyperlink when set |
+
+**Error behaviors:**
+- Missing register → red gate (exits 1; not an exception)
+- Missing acceptance criteria in story → `ValueError` from `load_story`
+- Claude returning no text block → prints `ERROR:` message and exits 1
+- Duplicate register records for same story+commit → last appended record wins
 
 ## CI secrets required
 
@@ -37,14 +61,3 @@ cd /path/to/protect
 |--------|---------|
 | `ANTHROPIC_API_KEY` | Claude API — test generation |
 | `GITHUB_TOKEN` | Auto-provided — PR comments and commits |
-
-## Cloudflare deployment secrets
-
-Set these in **GitHub → Settings → Secrets and variables → Actions**:
-
-| Secret | Where to find it |
-|--------|-----------------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens (Workers:Edit scope) |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Workers & Pages sidebar, or `npx wrangler whoami` |
-
-The `.github/workflows/deploy.yml` workflow deploys the full Next.js app (including the assurance dashboard) to Cloudflare Workers on every push to `main`.

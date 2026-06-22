@@ -24,6 +24,15 @@ def main():
 
     Steps: (1) load story from jira/, (2) call Claude twice (feature then
     test script), (3) write outputs + meta.json to <out>/<story-id>/.
+
+    Required env var:
+      ANTHROPIC_API_KEY  — Claude API key (no default; aborts if unset)
+
+    Implementation notes:
+      - Diff is capped at 8 000 chars before being sent to the prompt.
+      - Model is hardcoded to claude-opus-4-8; change the constant in this file to switch.
+      - If Claude returns a response with no text block (e.g. only tool-use blocks),
+        the script prints "ERROR: Claude returned no text block" and exits 1.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--story-id", required=True)

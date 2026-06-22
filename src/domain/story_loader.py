@@ -16,8 +16,9 @@ _AC_PATTERN = re.compile(r"^-\s+AC\d+:\s+(.+)$", re.MULTILINE)
 _TITLE_PATTERN = re.compile(r"^#\s+\S+\s+—\s+(.+)$", re.MULTILINE)
 # Matches: "**Test type**: pytest-bdd"  or  "**Test type**: Playwright"
 _TEST_TYPE_PATTERN = re.compile(r"\*\*Test type\*\*:\s+(pytest-bdd|Playwright)", re.IGNORECASE)
-# Matches the Description section body up to the next ## heading
-_DESC_PATTERN = re.compile(r"## Description\n(.+?)(?=\n##)", re.DOTALL)
+# Matches the Description section body up to the next ## heading or end of string.
+# The \Z alternative ensures description is captured when it is the last section.
+_DESC_PATTERN = re.compile(r"## Description\n(.+?)(?=\n##|\Z)", re.DOTALL)
 
 
 def parse_story_text(text: str, story_id: str) -> Story:

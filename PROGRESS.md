@@ -16,6 +16,7 @@
 - 2026-06-21: Proto-init — project scaffolded
 - 2026-06-21: Proto-implement — 66 tests green; all SPEC features covered
 - 2026-06-21: Proto-verify — all 66 tests green; dashboard verified at both viewports; 2 bugs fixed (register.json seeded from demo_records.json; CI workflow fallback SDK corrected openai→anthropic); VERIFIED
+- 2026-06-22: Agentic guide v7 compliance — 116 tests green; added AGENTS.md, CLAUDE.md @import, .claude/agents/ (research-assistant, test-writer, docs-writer), .claude/skills/ship-it/, .claude/hooks.json + hook scripts, .claude/mcp.json, scripts/init.sh, feature_list.json, docs/adr/ (3 ADRs), docs/research/INDEX.md, .github/copilot-instructions.md, llms.txt, CONTRIBUTING.md, .agent-audit/, ruff in pyproject.toml
 
 ## What's built
 | Feature | Status | Tests |

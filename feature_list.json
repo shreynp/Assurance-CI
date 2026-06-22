@@ -1,0 +1,48 @@
+{
+  "project": "assurance-ci",
+  "last_updated": "2026-06-22",
+  "features": [
+    {
+      "id": "F1",
+      "name": "AI test generation",
+      "status": "done",
+      "files": ["scripts/generate_tests.py", "src/domain/generator.py"],
+      "tests": 25,
+      "notes": "Claude generates Gherkin + pytest-bdd from story diff"
+    },
+    {
+      "id": "F2",
+      "name": "Test execution",
+      "status": "done",
+      "files": ["scripts/run_tests.py"],
+      "tests": 5,
+      "notes": "Runs generated tests, captures output to report JSON"
+    },
+    {
+      "id": "F3",
+      "name": "Traceability register",
+      "status": "done",
+      "files": ["scripts/append_record.py", "scripts/render_register.py", "src/domain/register.py", "traceability/register.json", "src/dashboard/app.py"],
+      "tests": 6,
+      "notes": "register.json → REGISTER.md → Streamlit dashboard"
+    },
+    {
+      "id": "F4",
+      "name": "Story-keyed CI trigger",
+      "status": "done",
+      "files": [".github/workflows/assurance.yml", "src/domain/commit_parser.py"],
+      "tests": 7,
+      "notes": "Commit message with PROT-NNN triggers assurance job"
+    },
+    {
+      "id": "F5",
+      "name": "Deploy gate",
+      "status": "done",
+      "files": ["scripts/resolve_gate.py"],
+      "tests": 8,
+      "notes": "Exits 0 (green/allow) or 1 (red/block) based on register row"
+    }
+  ],
+  "total_tests": 66,
+  "test_status": "all_green"
+}

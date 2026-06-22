@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/hooks/format-file.sh \"${CLAUDE_TOOL_INPUT_FILE_PATH}\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'REMINDER: src/domain/ must stay pure (no I/O). All I/O in scripts/. Seed data → traceability/register.json only.'"
+          }
+        ]
+      }
+    ]
+  }
+}

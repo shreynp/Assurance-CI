@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "description": "Version-specific library docs — eliminates wrong-version hallucination"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-playwright"],
+      "description": "E2E testing and UI verification for Streamlit dashboard"
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "description": "Lightweight web content fetch — convert pages to Markdown for research"
+    }
+  }
+}

@@ -65,7 +65,7 @@ class ExecutionReport:
 
     @property
     def all_passed(self) -> bool:
-        # Zero passed is treated as failure — an empty run cannot produce a false-green
+        """True only when passed > 0 and failed == 0; (0, 0) is treated as red to prevent false-green gates with no test evidence."""
         return self.failed == 0 and self.passed > 0
 
 

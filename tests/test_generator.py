@@ -114,6 +114,11 @@ class TestBuildTestScriptPrompt:
         prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
         assert "pass" in prompt
 
+    def test_explicit_feature_filename_appears_in_prompt(self):
+        story = load_story("PROT-101", JIRA_DIR)
+        prompt = build_test_script_prompt(story, self.FEATURE_TEXT, "custom_name.feature")
+        assert "custom_name.feature" in prompt
+
 
 # --- property: prompt never empty ---
 

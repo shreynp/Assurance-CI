@@ -6,6 +6,7 @@ generate_tests diff truncation.
 """
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -131,6 +132,20 @@ class TestStoryLoaderFallbacks:
         with pytest.raises(FileNotFoundError, match="PROT-999"):
             load_story("PROT-999", tmp_path)
 
+    def test_description_as_last_section_returns_content(self):
+        # Regression: _DESC_PATTERN used a lookahead for \n## that failed when
+        # ## Description was the final section — description silently returned "".
+        text = (
+            "# PROT-999 — Trailing description story\n"
+            "**Test type**: pytest-bdd\n"
+            "## Acceptance Criteria\n"
+            "- AC1: Works\n"
+            "## Description\n"
+            "This section has no trailing heading.\n"
+        )
+        story = parse_story_text(text, "PROT-999")
+        assert "trailing heading" in story.description
+
 
 # ─── register malformed JSON ──────────────────────────────────────────────────
 
@@ -231,6 +246,13 @@ class TestParseCountsEdgeCases:
         passed, failed = _run_tests.parse_counts(output)
         assert passed == 1
         assert failed == 1
+
+    def test_xfailed_returns_zero_counts(self):
+        # xfailed tokens don't match the summary regex or PASSED/FAILED substrings.
+        # (0, 0) → resolve_gate treats it as red — conservative but correct.
+        passed, failed = _run_tests.parse_counts("2 xfailed in 0.10s\n")
+        assert passed == 0
+        assert failed == 0
 
 
 # ─── resolve_gate.py error paths ─────────────────────────────────────────────
@@ -390,3 +412,172 @@ class TestGenerateTestsDiffTruncation:
 
         assert "content" in captured_prompt
         assert captured_prompt["content"].count("x") <= 8000
+
+
+# ─── run_tests.py output truncation ──────────────────────────────────────────
+
+class TestRunTestsOutputTruncation:
+    def test_output_truncated_to_4000_chars_in_report(self, tmp_path):
+        long_output = "x" * 10_000
+
+        meta = {
+            "story_id": "PROT-101",
+            "test_type": "pytest-bdd",
+            "feature_file": str(tmp_path / "PROT-101.feature"),
+            "test_script": str(tmp_path / "test_prot_101.py"),
+            "generated_at": "2026-06-22T00:00:00Z",
+        }
+        gen_dir = tmp_path / "generated" / "PROT-101"
+        gen_dir.mkdir(parents=True)
+        (gen_dir / "meta.json").write_text(json.dumps(meta))
+        report_dir = tmp_path / "reports"
+        report_dir.mkdir()
+
+        mock_proc = unittest.mock.MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = long_output
+        mock_proc.stderr = ""
+
+        with unittest.mock.patch("subprocess.run", return_value=mock_proc), \
+             unittest.mock.patch(
+                 "sys.argv",
+                 ["run_tests.py",
+                  "--story-id", "PROT-101",
+                  "--generated-dir", str(tmp_path / "generated"),
+                  "--report-out", str(report_dir)],
+             ):
+            with pytest.raises(SystemExit):
+                _run_tests.main()
+
+        report = json.loads((report_dir / "PROT-101_report.json").read_text())
+        assert len(report["output"]) <= 4000
+
+
+# ─── build_pr_body.py coverage ───────────────────────────────────────────────
+
+class TestBuildPrBody:
+    def test_happy_path_no_report_defaults_to_zero_counts(self, tmp_path):
+        gate = {"status": "green", "reason": "All 3 scenario(s) passed"}
+        gate_file = tmp_path / "gate.json"
+        gate_file.write_text(json.dumps(gate))
+        out_file = tmp_path / "pr_body.md"
+
+        result = subprocess.run(
+            [sys.executable, "scripts/build_pr_body.py",
+             "--story-id", "PROT-101",
+             "--gate", str(gate_file),
+             "--report-dir", str(tmp_path),
+             "--out", str(out_file)],
+            capture_output=True, text=True, cwd=PROJECT_ROOT,
+        )
+        assert result.returncode == 0
+        body = out_file.read_text()
+        assert "PROT-101" in body
+        assert "GREEN" in body
+
+    def test_happy_path_with_report_shows_counts(self, tmp_path):
+        gate = {"status": "green", "reason": "All 3 scenario(s) passed"}
+        gate_file = tmp_path / "gate.json"
+        gate_file.write_text(json.dumps(gate))
+        report = {
+            "passed": 3, "failed": 0, "output": "",
+            "commit_sha": "abc1234567", "timestamp": "2026-06-22T10:00:00",
+        }
+        (tmp_path / "PROT-101_report.json").write_text(json.dumps(report))
+        out_file = tmp_path / "pr_body.md"
+
+        result = subprocess.run(
+            [sys.executable, "scripts/build_pr_body.py",
+             "--story-id", "PROT-101",
+             "--gate", str(gate_file),
+             "--report-dir", str(tmp_path),
+             "--out", str(out_file)],
+            capture_output=True, text=True, cwd=PROJECT_ROOT,
+        )
+        assert result.returncode == 0
+        body = out_file.read_text()
+        assert "**3**" in body
+
+    def test_jira_data_url_renders_hyperlink(self, tmp_path):
+        gate = {"status": "red", "reason": "1 scenario(s) failed out of 1"}
+        gate_file = tmp_path / "gate.json"
+        gate_file.write_text(json.dumps(gate))
+        out_file = tmp_path / "pr_body.md"
+        env = {**os.environ, "JIRA_DATA_URL": "https://example.com/jira"}
+
+        result = subprocess.run(
+            [sys.executable, "scripts/build_pr_body.py",
+             "--story-id", "PROT-101",
+             "--gate", str(gate_file),
+             "--report-dir", str(tmp_path),
+             "--out", str(out_file)],
+            capture_output=True, text=True, cwd=PROJECT_ROOT, env=env,
+        )
+        assert result.returncode == 0
+        body = out_file.read_text()
+        assert "https://example.com/jira/PROT-101.md" in body
+
+
+# ─── generate_tests.py null Claude response ───────────────────────────────────
+
+class TestGenerateTestsNullClaudeResponse:
+    def _make_text_resp(self, text):
+        block = unittest.mock.MagicMock()
+        block.type = "text"
+        block.text = text
+        resp = unittest.mock.MagicMock()
+        resp.content = [block]
+        return resp
+
+    def _make_no_text_resp(self):
+        block = unittest.mock.MagicMock()
+        block.type = "tool_use"
+        resp = unittest.mock.MagicMock()
+        resp.content = [block]
+        return resp
+
+    def _run_main_with_side_effects(self, tmp_path, side_effects):
+        diff_file = tmp_path / "diff.txt"
+        diff_file.write_text("some diff")
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(exist_ok=True)
+
+        responses = list(side_effects)
+        call_idx = [0]
+
+        def fake_create(**kwargs):
+            resp = responses[call_idx[0]]
+            call_idx[0] += 1
+            return resp
+
+        with unittest.mock.patch("anthropic.Anthropic") as mock_cls:
+            mock_client = unittest.mock.MagicMock()
+            mock_client.messages.create.side_effect = fake_create
+            mock_cls.return_value = mock_client
+
+            spec = importlib.util.spec_from_file_location(
+                f"gen_tests_null_{id(tmp_path)}",
+                PROJECT_ROOT / "scripts" / "generate_tests.py",
+            )
+            mod = importlib.util.module_from_spec(spec)
+            with unittest.mock.patch(
+                "sys.argv",
+                ["generate_tests.py", "--story-id", "PROT-101",
+                 "--diff", str(diff_file), "--out", str(out_dir)],
+            ):
+                spec.loader.exec_module(mod)
+                with pytest.raises(SystemExit) as exc:
+                    mod.main()
+                return exc.value.code
+
+    def test_null_feature_response_exits_1(self, tmp_path):
+        code = self._run_main_with_side_effects(tmp_path, [self._make_no_text_resp()])
+        assert code == 1
+
+    def test_null_test_script_response_exits_1(self, tmp_path):
+        feature_text = "Feature: Test\n  Scenario: AC1\n    Given step\n    When step\n    Then step"
+        code = self._run_main_with_side_effects(
+            tmp_path,
+            [self._make_text_resp(feature_text), self._make_no_text_resp()],
+        )
+        assert code == 1
