@@ -29,6 +29,12 @@ class TestExtractStoryId:
     def test_has_story_id_false(self):
         assert has_story_id("chore: bump version") is False
 
+    def test_does_not_match_utf8(self):
+        assert extract_story_id("encoding: UTF-8 support") is None
+
+    def test_does_not_match_http2(self):
+        assert extract_story_id("upgrade to HTTP-2") is None
+
 
 # --- GateResult domain logic ---
 
@@ -56,6 +62,44 @@ class TestGateResult:
         )
         gate = GateResult.from_report(report)
         assert gate.status == "red"
+
+    def test_all_passed_property_true(self):
+        report = ExecutionReport(
+            story_id="PROT-101", commit_sha="abc123", author="dev",
+            passed=3, failed=0, environment="ci", timestamp="2026-06-21T10:00:00Z",
+        )
+        assert report.all_passed is True
+
+    def test_all_passed_property_false_when_failed(self):
+        report = ExecutionReport(
+            story_id="PROT-101", commit_sha="abc123", author="dev",
+            passed=0, failed=1, environment="ci", timestamp="2026-06-21T10:00:00Z",
+        )
+        assert report.all_passed is False
+
+    def test_all_passed_property_false_when_zero_zero(self):
+        report = ExecutionReport(
+            story_id="PROT-101", commit_sha="abc123", author="dev",
+            passed=0, failed=0, environment="ci", timestamp="2026-06-21T10:00:00Z",
+        )
+        assert report.all_passed is False
+
+    def test_green_reason_mentions_count(self):
+        report = ExecutionReport(
+            story_id="PROT-101", commit_sha="abc123", author="dev",
+            passed=4, failed=0, environment="ci", timestamp="2026-06-21T10:00:00Z",
+        )
+        gate = GateResult.from_report(report)
+        assert "4" in gate.reason
+
+    def test_red_reason_mentions_failed_and_total(self):
+        report = ExecutionReport(
+            story_id="PROT-101", commit_sha="abc123", author="dev",
+            passed=3, failed=2, environment="ci", timestamp="2026-06-21T10:00:00Z",
+        )
+        gate = GateResult.from_report(report)
+        assert "2" in gate.reason
+        assert "5" in gate.reason
 
 
 # --- story_loader ---
@@ -131,3 +175,18 @@ class TestRegister:
             md = render_markdown(path)
             assert "PROT-101" in md
             assert "GREEN" in md
+
+    def test_render_markdown_sha_truncated(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "register.json"
+            append_record(self._make_record(sha="abc1234567890"), path)
+            md = render_markdown(path)
+            assert "abc1234" in md
+            assert "abc1234567890" not in md
+
+    def test_render_markdown_red_record(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "register.json"
+            append_record(self._make_record(status="red"), path)
+            md = render_markdown(path)
+            assert "RED" in md

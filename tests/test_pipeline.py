@@ -4,7 +4,8 @@ F4 story-keyed trigger, F5 gate resolution.
 All tests are pure-Python with no I/O to external services.
 """
 import json
-import re
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -20,7 +21,6 @@ from src.domain.register import append_record, render_markdown
 class TestPipelineTrigger:
     """SPEC F4 — commit message parsing drives whether the pipeline runs."""
 
-    # Scenario: developer commits with story ID → pipeline starts
     def test_standard_story_commit_triggers_pipeline(self):
         assert extract_story_id("PROT-101: add assessment submission endpoint") == "PROT-101"
 
@@ -30,7 +30,6 @@ class TestPipelineTrigger:
     def test_story_id_extracted_from_prot103(self):
         assert extract_story_id("PROT-103: show delta flags on triangulated view") == "PROT-103"
 
-    # Scenario: no story ID → pipeline skips without error
     def test_no_story_id_skips_pipeline(self):
         assert has_story_id("fix typo in README") is False
 
@@ -40,7 +39,6 @@ class TestPipelineTrigger:
     def test_whitespace_only_message_skips(self):
         assert has_story_id("   ") is False
 
-    # Scenario: PROT-999 — story file missing → load fails loudly
     def test_missing_story_raises_not_found(self):
         from src.io.story_loader import load_story
         jira_dir = Path(__file__).parent.parent / "jira"
@@ -50,8 +48,7 @@ class TestPipelineTrigger:
 
 # ─── F2: Execution output parsing ──────────────────────────────────────────
 
-# Import the parse_counts helper from run_tests (script-level utility)
-import importlib.util, sys
+import importlib.util
 
 def _import_run_tests():
     spec = importlib.util.spec_from_file_location(
@@ -140,7 +137,6 @@ class TestTraceabilityRegisterFormat:
             appended_at="2026-06-21T10:00:00Z",
         )
 
-    # Scenario: register has the required columns
     def test_register_table_has_required_columns(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "register.json"
@@ -152,18 +148,16 @@ class TestTraceabilityRegisterFormat:
             assert "Result" in md
             assert "Date" in md
 
-    # Scenario: register shows story ID, SHA, author, result, date
     def test_register_row_contains_story_id(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "register.json"
             append_record(self._make_record(story_id="PROT-101", sha="abc1234567"), path)
             md = render_markdown(path)
             assert "PROT-101" in md
-            assert "abc1234" in md   # 7-char SHA in the rendered table
+            assert "abc1234" in md
             assert "dev@example.com" in md
             assert "2026-06-21" in md
 
-    # Scenario: green result shows GREEN
     def test_register_green_result_shown(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "register.json"
@@ -171,7 +165,6 @@ class TestTraceabilityRegisterFormat:
             md = render_markdown(path)
             assert "GREEN" in md
 
-    # Scenario: red result shows RED
     def test_register_red_result_shown(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "register.json"
@@ -179,7 +172,6 @@ class TestTraceabilityRegisterFormat:
             md = render_markdown(path)
             assert "RED" in md
 
-    # Scenario: exactly one new row appended per run, prior rows unchanged
     def test_append_only_one_row_per_run(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "register.json"
@@ -188,10 +180,8 @@ class TestTraceabilityRegisterFormat:
             append_record(self._make_record(story_id="PROT-102"), path)
             records_after = json.loads(path.read_text())
             assert len(records_after) == len(records_before) + 1
-            # Prior row unchanged
             assert records_after[0] == records_before[0]
 
-    # Scenario: 3 stories produce 3 independent rows
     def test_all_three_seed_stories_in_register(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "register.json"
@@ -210,7 +200,6 @@ class TestTraceabilityRegisterFormat:
 class TestDeployGate:
     """SPEC F5 — gate is green when all pass, red when any fail."""
 
-    # Scenario: all scenarios passed → green gate
     def test_gate_green_when_all_passed(self):
         report = ExecutionReport(
             story_id="PROT-101", commit_sha="sha001", author="dev",
@@ -219,7 +208,6 @@ class TestDeployGate:
         gate = GateResult.from_report(report)
         assert gate.status == "green"
 
-    # Scenario: at least one scenario failed → red gate
     def test_gate_red_when_one_fails(self):
         report = ExecutionReport(
             story_id="PROT-102", commit_sha="sha002", author="dev",
@@ -236,7 +224,6 @@ class TestDeployGate:
         gate = GateResult.from_report(report)
         assert gate.status == "red"
 
-    # Edge: zero tests run is treated as red (no evidence of passing)
     def test_gate_red_when_zero_tests_ran(self):
         report = ExecutionReport(
             story_id="PROT-101", commit_sha="sha004", author="dev",
@@ -245,7 +232,6 @@ class TestDeployGate:
         gate = GateResult.from_report(report)
         assert gate.status == "red"
 
-    # Reason string is present
     def test_gate_green_reason_mentions_count(self):
         report = ExecutionReport(
             story_id="PROT-101", commit_sha="sha005", author="dev",
@@ -262,12 +248,10 @@ class TestDeployGate:
         gate = GateResult.from_report(report)
         assert "2" in gate.reason
 
-    # resolve_gate.py script integration
     def test_resolve_gate_script_exits_0_on_green(self):
-        import subprocess, sys
+        PROJECT_ROOT = Path(__file__).parent.parent
         with tempfile.TemporaryDirectory() as tmpdir:
             register = Path(tmpdir) / "register.json"
-            # Write a green record directly
             record = {
                 "story_id": "PROT-101",
                 "commit_sha": "abc123abc123",
@@ -283,13 +267,13 @@ class TestDeployGate:
                  "--story-id", "PROT-101",
                  "--commit-sha", "abc123abc123",
                  "--output", str(gate_out)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, cwd=PROJECT_ROOT,
             )
             assert result.returncode == 0
             assert json.loads(gate_out.read_text())["status"] == "green"
 
     def test_resolve_gate_script_exits_1_on_red(self):
-        import subprocess, sys
+        PROJECT_ROOT = Path(__file__).parent.parent
         with tempfile.TemporaryDirectory() as tmpdir:
             register = Path(tmpdir) / "register.json"
             record = {
@@ -307,7 +291,7 @@ class TestDeployGate:
                  "--story-id", "PROT-102",
                  "--commit-sha", "def456def456",
                  "--output", str(gate_out)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, cwd=PROJECT_ROOT,
             )
             assert result.returncode == 1
             assert json.loads(gate_out.read_text())["status"] == "red"

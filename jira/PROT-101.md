@@ -10,4 +10,4 @@ Currently all assessment scores are computed client-side and lost on page refres
 - AC1: The endpoint accepts a POST request with market, element, task, selfScore (1–5), and rationale
 - AC2: It returns a 200 response with an assessment ID and the submission timestamp
 - AC3: It returns a 400 error if selfScore is outside the 1–5 range
-- AC4: It returns a 400 error if the element value is not a recognised element name
+- AC4: It returns a 400 error if the element value is not a recognised element name. The recognised element names are: "HCP Engagement", "Brand Planning", "Campaign Execution", "Patient Identification", "Media & Promotion"

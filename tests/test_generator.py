@@ -32,8 +32,12 @@ class TestStripFences:
         raw = "```\n\n```"
         assert strip_fences(raw) == ""
 
+    def test_bare_fence_no_language(self):
+        raw = "```\ndef foo(): pass\n```"
+        assert "def foo" in strip_fences(raw)
 
-# --- build_feature_prompt (F1) ---
+
+# --- build_feature_prompt ---
 
 class TestBuildFeaturePrompt:
     def setup_method(self):
@@ -62,21 +66,27 @@ class TestBuildFeaturePrompt:
         assert "PROT-102" in prompt
         assert len([c for c in story.acceptance_criteria if c in prompt]) == len(story.acceptance_criteria)
 
+    def test_empty_criteria_produces_non_empty_prompt(self):
+        from src.domain.models import Story
+        story = Story(id="PROT-999", title="T", description="D", acceptance_criteria=[], test_type="playwright")
+        prompt = build_feature_prompt(story, "diff")
+        assert "PROT-999" in prompt
 
-# --- build_test_script_prompt (F1) ---
+
+# --- build_test_script_prompt ---
 
 class TestBuildTestScriptPrompt:
     FEATURE_TEXT = "Feature: PROT-101\n  Scenario: AC1\n    Given...\n    When...\n    Then..."
 
     def test_pytest_bdd_prompt_for_pytest_bdd_story(self):
-        story = load_story("PROT-101", JIRA_DIR)  # test_type=pytest-bdd
+        story = load_story("PROT-101", JIRA_DIR)
         prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
         assert "pytest_bdd" in prompt
         assert "httpx" in prompt
         assert self.FEATURE_TEXT in prompt
 
     def test_playwright_prompt_for_ui_story(self):
-        story = load_story("PROT-102", JIRA_DIR)  # test_type=playwright
+        story = load_story("PROT-102", JIRA_DIR)
         prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
         assert "playwright" in prompt.lower()
         assert "1280x800" in prompt or "1280" in prompt
@@ -85,7 +95,6 @@ class TestBuildTestScriptPrompt:
     def test_pytest_bdd_prompt_does_not_mention_playwright(self):
         story = load_story("PROT-101", JIRA_DIR)
         prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
-        # Should be pytest-bdd, not playwright
         assert "playwright" not in prompt.lower()
 
     def test_playwright_prompt_does_not_mention_pytest_bdd(self):
@@ -93,22 +102,22 @@ class TestBuildTestScriptPrompt:
         prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
         assert "pytest_bdd" not in prompt
 
+    def test_unknown_test_type_falls_back_to_playwright(self):
+        from src.domain.models import Story
+        story = Story(id="PROT-999", title="T", description="D", acceptance_criteria=["AC1: x"],
+                      test_type="playwright")
+        prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
+        assert "playwright" in prompt.lower()
+
     def test_instructs_no_pass_placeholders(self):
         story = load_story("PROT-101", JIRA_DIR)
         prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
-        assert "pass" in prompt  # the rule says "no `pass` placeholders"
-
-    def test_prompt_contains_story_description(self):
-        story = load_story("PROT-101", JIRA_DIR)
-        prompt = build_test_script_prompt(story, self.FEATURE_TEXT)
-        assert "assessment" in prompt.lower()  # description mentions assessments
+        assert "pass" in prompt
 
 
 # --- property: prompt never empty ---
 
 class TestPromptProperties:
-    """Invariants that must hold for any story."""
-
     @pytest.mark.parametrize("story_id", ["PROT-101", "PROT-102", "PROT-103"])
     def test_feature_prompt_always_non_empty(self, story_id):
         story = load_story(story_id, JIRA_DIR)

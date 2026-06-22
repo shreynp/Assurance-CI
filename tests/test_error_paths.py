@@ -60,7 +60,6 @@ def _make_report(story_id="PROT-101", sha="abc123", passed=3, failed=0):
 
 class TestStoryLoaderFallbacks:
     def test_missing_description_returns_empty_string(self, tmp_path):
-        """Story without a ## Description section → description=''."""
         story_file = tmp_path / "PROT-999.md"
         story_file.write_text(
             "# PROT-999 — No description story\n"
@@ -73,7 +72,6 @@ class TestStoryLoaderFallbacks:
         assert story.id == "PROT-999"
 
     def test_missing_test_type_defaults_to_playwright(self, tmp_path):
-        """Story without a **Test type** line → test_type defaults to 'playwright'."""
         story_file = tmp_path / "PROT-999.md"
         story_file.write_text(
             "# PROT-999 — No type story\n"
@@ -85,7 +83,6 @@ class TestStoryLoaderFallbacks:
         assert story.test_type == "playwright"
 
     def test_unknown_test_type_defaults_to_playwright(self, tmp_path):
-        """Unrecognised test type (e.g. Selenium) → silently falls back to 'playwright'."""
         story_file = tmp_path / "PROT-999.md"
         story_file.write_text(
             "# PROT-999 — Selenium story\n"
@@ -98,7 +95,6 @@ class TestStoryLoaderFallbacks:
         assert story.test_type == "playwright"
 
     def test_non_ascii_content_parses_without_error(self, tmp_path):
-        """Story file with non-ASCII characters (accents, em-dashes) must not raise."""
         story_file = tmp_path / "PROT-999.md"
         story_file.write_text(
             "# PROT-999 — Café story\n"
@@ -112,7 +108,6 @@ class TestStoryLoaderFallbacks:
         assert "Résumé" in story.acceptance_criteria[0]
 
     def test_missing_title_falls_back_to_story_id(self):
-        """When the title heading is absent, title defaults to story_id."""
         text = (
             "**Test type**: pytest-bdd\n"
             "## Description\nSome desc.\n"
@@ -122,61 +117,95 @@ class TestStoryLoaderFallbacks:
         story = parse_story_text(text, "PROT-999")
         assert story.title == "PROT-999"
 
+    def test_missing_acceptance_criteria_raises_value_error(self, tmp_path):
+        story_file = tmp_path / "PROT-999.md"
+        story_file.write_text(
+            "# PROT-999 — No AC story\n"
+            "**Test type**: pytest-bdd\n"
+            "## Description\nSome desc.\n"
+        )
+        with pytest.raises(ValueError, match="acceptance criteria"):
+            load_story("PROT-999", tmp_path)
+
+    def test_missing_file_raises_file_not_found(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match="PROT-999"):
+            load_story("PROT-999", tmp_path)
+
 
 # ─── register malformed JSON ──────────────────────────────────────────────────
 
 class TestRegisterMalformedJson:
     def test_append_record_raises_on_corrupt_json(self, tmp_path):
-        """append_record raises JSONDecodeError when the register file is corrupt."""
         register = tmp_path / "register.json"
         register.write_text('{"broken": [}')
         with pytest.raises(json.JSONDecodeError):
             append_record(_make_report(), register)
 
 
-# ─── commit_parser first-match-wins ──────────────────────────────────────────
+# ─── commit_parser edge cases ─────────────────────────────────────────────────
 
-class TestCommitParserFirstMatch:
+class TestCommitParserEdgeCases:
     def test_dual_story_ids_returns_first(self):
-        """When two story IDs appear in a message, only the first is returned."""
         result = extract_story_id("PROT-101 PROT-102: dual story commit")
         assert result == "PROT-101"
+
+    def test_lowercase_does_not_match(self):
+        assert extract_story_id("prot-101: lowercase") is None
+
+    def test_no_digit_does_not_match(self):
+        assert extract_story_id("PROT-: no number") is None
+
+    def test_whitespace_only_returns_none(self):
+        assert extract_story_id("   ") is None
+
+    def test_empty_string_returns_none(self):
+        assert extract_story_id("") is None
+
+    def test_utf8_token_does_not_match(self):
+        assert extract_story_id("encoding: UTF-8 compliance") is None
+
+    def test_http2_token_does_not_match(self):
+        assert extract_story_id("upgrade to HTTP-2 protocol") is None
 
 
 # ─── GateResult reason format ─────────────────────────────────────────────────
 
 class TestGateResultReasonFormat:
     def test_red_reason_includes_both_counts(self):
-        """Red gate reason must include both the failed and total counts."""
         report = ExecutionReport(
             story_id="PROT-101", commit_sha="abc123", author="dev",
             passed=3, failed=2, environment="ci", timestamp="2026-06-21T10:00:00Z",
         )
         gate = GateResult.from_report(report)
         assert gate.status == "red"
-        assert "2" in gate.reason   # failed count
-        assert "5" in gate.reason   # total (3+2)
+        assert "2" in gate.reason
+        assert "5" in gate.reason
+
+    def test_zero_zero_reason_reflects_no_evidence(self):
+        report = ExecutionReport(
+            story_id="PROT-101", commit_sha="abc123", author="dev",
+            passed=0, failed=0, environment="ci", timestamp="2026-06-21T10:00:00Z",
+        )
+        gate = GateResult.from_report(report)
+        assert gate.status == "red"
 
 
 # ─── parse_counts edge cases ─────────────────────────────────────────────────
 
 class TestParseCountsEdgeCases:
     def test_no_tests_ran_returns_zeros(self):
-        """'no tests ran' output produces (0, 0) without raising."""
         output = "no tests ran in 0.05s\n"
         passed, failed = _run_tests.parse_counts(output)
         assert passed == 0
         assert failed == 0
 
     def test_collected_zero_items_returns_zeros(self):
-        """'collected 0 items' output (no summary line) returns (0, 0)."""
         output = "collected 0 items\n\n"
         passed, failed = _run_tests.parse_counts(output)
         assert passed == 0
         assert failed == 0
 
     def test_error_in_summary_line_counted_as_failed(self):
-        """Pytest summary with errors ('2 failed, 1 error') counts both as failures."""
         output = (
             "test_x.py::test_a FAILED\n"
             "test_x.py::test_b FAILED\n"
@@ -186,12 +215,28 @@ class TestParseCountsEdgeCases:
         passed, failed = _run_tests.parse_counts(output)
         assert failed >= 2
 
+    def test_empty_output_returns_zeros(self):
+        passed, failed = _run_tests.parse_counts("")
+        assert passed == 0
+        assert failed == 0
+
+    def test_all_passed_summary(self):
+        output = "3 passed in 0.12s\n"
+        passed, failed = _run_tests.parse_counts(output)
+        assert passed == 3
+        assert failed == 0
+
+    def test_mixed_summary(self):
+        output = "1 passed, 1 failed in 0.15s\n"
+        passed, failed = _run_tests.parse_counts(output)
+        assert passed == 1
+        assert failed == 1
+
 
 # ─── resolve_gate.py error paths ─────────────────────────────────────────────
 
 class TestResolveGateErrorPaths:
     def test_malformed_register_exits_nonzero(self, tmp_path):
-        """resolve_gate.py with a corrupt register exits non-zero and prints an error."""
         register = tmp_path / "register.json"
         register.write_text('not valid json')
         gate_out = tmp_path / "gate.json"
@@ -206,8 +251,55 @@ class TestResolveGateErrorPaths:
         assert result.returncode != 0
         assert "ERROR" in result.stdout or "ERROR" in result.stderr
 
+    def test_missing_register_produces_red_gate(self, tmp_path):
+        gate_out = tmp_path / "gate.json"
+        result = subprocess.run(
+            [sys.executable, "scripts/resolve_gate.py",
+             "--register", str(tmp_path / "missing.json"),
+             "--story-id", "PROT-101",
+             "--commit-sha", "abc123",
+             "--output", str(gate_out)],
+            capture_output=True, text=True, cwd=PROJECT_ROOT,
+        )
+        assert result.returncode == 1
+        assert json.loads(gate_out.read_text())["status"] == "red"
+
+    def test_no_matching_record_produces_red_gate(self, tmp_path):
+        register = tmp_path / "register.json"
+        register.write_text(json.dumps([{
+            "story_id": "PROT-102", "commit_sha": "other",
+            "gate_result": {"status": "green", "reason": "passed"},
+        }]))
+        gate_out = tmp_path / "gate.json"
+        result = subprocess.run(
+            [sys.executable, "scripts/resolve_gate.py",
+             "--register", str(register),
+             "--story-id", "PROT-101",
+             "--commit-sha", "abc123",
+             "--output", str(gate_out)],
+            capture_output=True, text=True, cwd=PROJECT_ROOT,
+        )
+        assert result.returncode == 1
+
+    def test_green_record_exits_0(self, tmp_path):
+        register = tmp_path / "register.json"
+        register.write_text(json.dumps([{
+            "story_id": "PROT-101", "commit_sha": "abc123abc123",
+            "gate_result": {"status": "green", "reason": "All 4 scenario(s) passed"},
+        }]))
+        gate_out = tmp_path / "gate.json"
+        result = subprocess.run(
+            [sys.executable, "scripts/resolve_gate.py",
+             "--register", str(register),
+             "--story-id", "PROT-101",
+             "--commit-sha", "abc123abc123",
+             "--output", str(gate_out)],
+            capture_output=True, text=True, cwd=PROJECT_ROOT,
+        )
+        assert result.returncode == 0
+        assert json.loads(gate_out.read_text())["status"] == "green"
+
     def test_duplicate_records_last_wins(self, tmp_path):
-        """When two records share story_id+commit_sha, the last (latest) is used."""
         register = tmp_path / "register.json"
         records = [
             {"story_id": "PROT-101", "commit_sha": "abc123",
@@ -233,7 +325,6 @@ class TestResolveGateErrorPaths:
 
 class TestAppendRecordScriptErrorPaths:
     def test_missing_meta_json_exits_nonzero(self, tmp_path):
-        """append_record.py with no meta.json exits non-zero with an error message."""
         gen_dir = tmp_path / "generated"
         gen_dir.mkdir()
         report_dir = tmp_path / "reports"
@@ -260,7 +351,6 @@ anthropic_pkg = pytest.importorskip("anthropic", reason="anthropic package not i
 
 class TestGenerateTestsDiffTruncation:
     def test_diff_truncated_to_8000_chars(self, tmp_path):
-        """generate_tests.py truncates diff to 8000 chars before passing to the model."""
         big_diff = "x" * 20_000
         diff_file = tmp_path / "big.diff"
         diff_file.write_text(big_diff)
@@ -272,7 +362,6 @@ class TestGenerateTestsDiffTruncation:
         def fake_create(**kwargs):
             msg = kwargs["messages"][0]["content"]
             captured_prompt["content"] = msg
-            # Return a minimal valid Anthropic-style response
             text_block = unittest.mock.MagicMock()
             text_block.type = "text"
             text_block.text = "Feature: Test\n  Scenario: AC1\n    Given step\n    When step\n    Then step"
@@ -285,7 +374,6 @@ class TestGenerateTestsDiffTruncation:
             mock_client.messages.create.side_effect = fake_create
             mock_anthropic_cls.return_value = mock_client
 
-            # Import the module and call main() explicitly with patched args
             spec = importlib.util.spec_from_file_location(
                 "generate_tests_mod", PROJECT_ROOT / "scripts" / "generate_tests.py"
             )
@@ -300,7 +388,5 @@ class TestGenerateTestsDiffTruncation:
                 spec.loader.exec_module(mod)
                 mod.main()
 
-        # The diff in the prompt must be at most 8000 chars
         assert "content" in captured_prompt
-        # Count occurrences of the repeated char — must not exceed 8000
         assert captured_prompt["content"].count("x") <= 8000
