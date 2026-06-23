@@ -41,6 +41,13 @@ shreyas.jagannath@newpage.io
 
 ## Acceptance Criteria
 
+- AC1: Nav bar shows a chip with the user's first name
+- AC2: Chip also shows the user's market in parentheses
+- AC3: Chip is fully visible at 1280×800 without overflow
+- AC4: Clicking the chip opens a dropdown with a "Sign out" option
+- AC5: Clicking "Sign out" calls DELETE /api/session and redirects to /login
+
+
 **AC1 — Nav bar shows a chip with the user's first name**  
 Given a logged-in user named "Shreyas Jagannath",  
 When any authenticated page is loaded,  

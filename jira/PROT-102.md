@@ -38,6 +38,14 @@ The track spans the full width of the form field. Labels "1" and "5" appear at t
 
 ## Acceptance Criteria
 
+- AC1: Slider renders in place of the numeric input
+- AC2: Live label updates during drag, not only on release
+- AC3: Slider only stops at integer positions 1 through 5
+- AC4: Form submission includes the slider's integer value in the request body
+- AC5: Full slider track is visible at 1280×800 without clipping
+- AC6: Page load defaults to position 3
+
+
 **AC1 — Slider renders in place of the numeric input**  
 Given a user navigates to `/assessment`,  
 When the page fully loads,  

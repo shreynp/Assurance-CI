@@ -51,6 +51,13 @@ Add a `GET /api/assessments/:id/triangulation` route handler. Given an assessmen
 
 ## Acceptance Criteria
 
+- AC1: Returns 200 with selfScore, aiScore, icoScore, and deltaFlags
+- AC2: Each deltaFlag item includes element, selfScore, aiScore, gap, and direction
+- AC3: Only elements with gap > 1 appear in deltaFlags
+- AC4: Assessment belonging to a different user returns 403
+- AC5: Non-existent assessment ID returns 404
+
+
 **AC1 — Returns 200 with selfScore, aiScore, icoScore, and deltaFlags**  
 Given an authenticated user owns assessment `assess_01J2XKPQ3W` with `selfScore: 3` and the AI score for that element is 4, and the ICO benchmark is 4,  
 When they call `GET /api/assessments/assess_01J2XKPQ3W/triangulation`,  

@@ -31,6 +31,13 @@ Use `window.location.href = '/api/assessments/export'` or a `<a href="/api/asses
 
 ## Acceptance Criteria
 
+- AC1: "Export as CSV" button is visible on the /history page
+- AC2: Clicking the button triggers a file download named assessments_export.csv
+- AC3: The downloaded file contains a header row with the correct column names
+- AC4: Each submission appears as a data row in the correct column order
+- AC5: Button is still visible and clickable when the user has no submissions
+
+
 **AC1 — "Export as CSV" button is visible on the /history page**  
 Given a user navigates to `/history`,  
 When the page loads (regardless of whether there are submissions),  

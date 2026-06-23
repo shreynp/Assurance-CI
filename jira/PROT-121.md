@@ -51,6 +51,13 @@ Add a `POST /api/notifications` route handler. The endpoint creates a new notifi
 
 ## Acceptance Criteria
 
+- AC1: Valid request returns 201 with the created notification record
+- AC2: Response includes all required fields in the correct shape
+- AC3: `read` defaults to false on creation
+- AC4: Missing userId or message returns 400
+- AC5: Contributor token returns 403
+
+
 **AC1 — Valid request returns 201 with the created notification record**  
 Given an admin user sends `POST /api/notifications` with `userId: "user_abc123"`, `type: "ai_complete"`, `message: "AI done"`, and `link: "/triangulated"`,  
 When the request is processed,  

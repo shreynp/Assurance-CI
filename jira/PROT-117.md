@@ -46,6 +46,13 @@ Each badge has a hover tooltip explaining the confidence score:
 
 ## Acceptance Criteria
 
+- AC1: Each legend label has a confidence badge showing a percentage or "—"
+- AC2: Badge colour reflects confidence level
+- AC3: Hovering over a confidence badge shows an explanatory tooltip
+- AC4: Badge shows "—" when confidence data is unavailable for a source
+- AC5: Badges are visible at 1280×800 without overlapping any chart elements
+
+
 **AC1 — Each legend label has a confidence badge showing a percentage or "—"**  
 Given the `/triangulated` page is loaded for an assessment where `confidences.ai = 0.87` and `confidences.ico = 0.95`,  
 When the spider chart legend renders,  

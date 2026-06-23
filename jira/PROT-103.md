@@ -48,6 +48,13 @@ HCP Engagement        Self: 5 · AI: 3 · Gap: +2 ↑
 
 ## Acceptance Criteria
 
+- AC1: Section heading appears below the spider chart with the flagged count
+- AC2: Each flagged element row shows the element name, both scores, and the signed gap
+- AC3: Elements with gap ≤ 1 are excluded from the list
+- AC4: Empty state is shown when no elements are flagged
+- AC5: Section is visible at 1280×800 viewport without scrolling past the spider chart
+
+
 **AC1 — Section heading appears below the spider chart with the flagged count**  
 Given the `/triangulated` page is loaded for an assessment whose triangulation response includes 2 delta flags,  
 When the page fully renders,  

@@ -43,6 +43,13 @@ Add a `GET /api/assessments/summary` route handler. The endpoint aggregates all 
 
 ## Acceptance Criteria
 
+- AC1: Returns 200 with an array of per-element aggregate objects
+- AC2: Each object includes element, averageSelfScore, and submissionCount
+- AC3: Elements with zero submissions are excluded
+- AC4: User with no submissions at all receives 200 with an empty array
+- AC5: averageSelfScore is computed only over the authenticated user's own submissions
+
+
 **AC1 — Returns 200 with an array of per-element aggregate objects**  
 Given a user has submitted 3 assessments for "HCP Engagement" (scores 3, 4, 4) and 1 assessment for "Brand Planning" (score 4),  
 When they call `GET /api/assessments/summary`,  

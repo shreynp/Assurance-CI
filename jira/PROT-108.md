@@ -50,6 +50,13 @@ Add a `GET /api/assessments` route handler that returns a paginated list of the 
 
 ## Acceptance Criteria
 
+- AC1: Valid request returns 200 with items array and total count
+- AC2: Each item contains the required fields
+- AC3: Results are sorted by submittedAt descending
+- AC4: Pagination via ?limit and ?offset works correctly
+- AC5: Only the authenticated user's own records are returned
+
+
 **AC1 — Valid request returns 200 with items array and total count**  
 Given an authenticated user has 3 submissions in the data store,  
 When they send `GET /api/assessments`,  

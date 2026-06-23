@@ -46,6 +46,13 @@ Hovering over any data point on the sparkline shows a tooltip: `"Score: {score} 
 
 ## Acceptance Criteria
 
+- AC1: A sparkline chart is rendered in each element group header row
+- AC2: Sparkline shows one data point per submission in chronological order
+- AC3: Upward trend renders in green; flat or downward trend renders in blue
+- AC4: Hovering over a sparkline data point shows a tooltip with score and date
+- AC5: An element with only one submission shows a single-point flat line without errors
+
+
 **AC1 — A sparkline chart is rendered in each element group header row**  
 Given a user has submissions for "HCP Engagement" and "Brand Planning",  
 When the `/history` page loads,  

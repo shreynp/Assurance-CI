@@ -31,6 +31,13 @@ The toast must not appear on the login redirect — unauthenticated users are si
 
 ## Acceptance Criteria
 
+- AC1: Contributor navigating to /admin is redirected to /assessment
+- AC2: Toast message appears on /assessment after the redirect
+- AC3: Redirect happens before any admin data is fetched
+- AC4: Admin user can access /admin without any redirect
+- AC5: Unauthenticated user navigating to /admin is redirected to the login page
+
+
 **AC1 — Contributor navigating to /admin is redirected to /assessment**  
 Given a logged-in user with `role: "contributor"` navigates directly to `/admin`,  
 When the page attempts to load,  

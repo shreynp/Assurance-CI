@@ -68,6 +68,14 @@ The `id` is server-generated. `submittedAt` is the server timestamp at the momen
 
 ## Acceptance Criteria
 
+- AC1: Valid submission is persisted and the full record is returned
+- AC2: selfScore below range is rejected
+- AC3: selfScore above range is rejected
+- AC4: Unrecognised element name is rejected
+- AC5: Missing required field is rejected
+- AC6: Unauthenticated request is rejected before business logic runs
+
+
 **AC1 — Valid submission is persisted and the full record is returned**  
 Given an authenticated user sends `POST /api/assessments` with `market: "US"`, `element: "HCP Engagement"`, `task: "Identify top HCPs"`, `selfScore: 4`, and `rationale: "Good model"`,  
 When the request is processed,  

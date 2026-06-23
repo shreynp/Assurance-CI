@@ -44,6 +44,13 @@ Brand Planning,"Plan for H2, including launch",3,"Said ""good"" but needs more w
 
 ## Acceptance Criteria
 
+- AC1: Response returns HTTP 200 with Content-Type text/csv
+- AC2: Response includes Content-Disposition header with correct filename
+- AC3: CSV body starts with the correct header row
+- AC4: Rationale fields containing commas are correctly quoted
+- AC5: Authenticated user with no submissions receives header-only response with HTTP 200
+
+
 **AC1 — Response returns HTTP 200 with Content-Type text/csv**  
 Given an authenticated user calls `GET /api/assessments/export`,  
 When the request is processed,  

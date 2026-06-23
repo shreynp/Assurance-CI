@@ -44,6 +44,13 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ## Acceptance Criteria
 
+- AC1: Request with no Authorization header returns 401
+- AC2: Request with a malformed Bearer token returns 401
+- AC3: Request with an expired Bearer token returns 401
+- AC4: Request with a valid Bearer token reaches the route handler
+- AC5: Validated user ID is available in the request context for downstream handlers
+
+
 **AC1 — Request with no Authorization header returns 401**  
 Given a `POST /api/assessments` request with no `Authorization` header at all,  
 When the middleware processes the request,  

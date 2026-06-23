@@ -56,6 +56,13 @@ Clicking the bell opens a dropdown listing the **5 most recent notifications** (
 
 ## Acceptance Criteria
 
+- AC1: Bell icon appears in nav bar on all authenticated pages
+- AC2: Badge shows unread count when there are unread notifications
+- AC3: Badge disappears when all notifications are read
+- AC4: Clicking the bell opens a dropdown with the 5 most recent notifications
+- AC5: Each unread notification in the dropdown has a "Mark as read" action that updates the badge immediately
+
+
 **AC1 — Bell icon appears in nav bar on all authenticated pages**  
 Given a logged-in user is on any authenticated page (`/assessment`, `/history`, `/triangulated`),  
 When the page loads,  

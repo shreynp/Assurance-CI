@@ -50,6 +50,13 @@ Immutable fields that must not be accepted in the PATCH body: `id`, `userId`, `e
 
 ## Acceptance Criteria
 
+- AC1: Valid PATCH updates both selfScore and rationale and returns the full updated record
+- AC2: Response includes updatedAt set to the current server time
+- AC3: PATCH for an assessment owned by a different user returns 403
+- AC4: selfScore outside 1–5 returns 400
+- AC5: Non-existent assessment ID returns 404
+
+
 **AC1 — Valid PATCH updates both selfScore and rationale and returns the full updated record**  
 Given an authenticated user owns assessment `assess_01J2XKPQ3W` with `selfScore: 4`,  
 When they send `PATCH /api/assessments/assess_01J2XKPQ3W` with `{ "selfScore": 3, "rationale": "Revised." }`,  

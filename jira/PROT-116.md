@@ -43,6 +43,13 @@ Clicking any column header sorts the table by that column. Clicking the same hea
 
 ## Acceptance Criteria
 
+- AC1: Table appears below spider chart with the five required columns
+- AC2: Gap column shows signed numeric difference (selfScore − aiScore)
+- AC3: Rows with absolute gap > 1 are highlighted amber
+- AC4: Clicking a column header sorts the table by that column
+- AC5: Table is visible at 1280×800 viewport without scrolling past the chart
+
+
 **AC1 — Table appears below spider chart with the five required columns**  
 Given the `/triangulated` page is loaded for a valid assessment,  
 When the page renders,  

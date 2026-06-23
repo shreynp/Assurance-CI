@@ -42,6 +42,13 @@ This is a state-transition endpoint (unread → read), not a general-purpose par
 
 ## Acceptance Criteria
 
+- AC1: Marking an unread notification returns 200 with read: true and readAt set
+- AC2: Calling the endpoint on an already-read notification is idempotent
+- AC3: Marking a notification belonging to a different user returns 403
+- AC4: Non-existent notification ID returns 404
+- AC5: After marking as read, GET /api/notifications reflects the updated state
+
+
 **AC1 — Marking an unread notification returns 200 with read: true and readAt set**  
 Given notification `notif_01J2XKPQ3W` exists with `read: false` and belongs to the authenticated user,  
 When they send `POST /api/notifications/notif_01J2XKPQ3W/read`,  

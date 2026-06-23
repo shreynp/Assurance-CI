@@ -48,6 +48,13 @@ The expanded detail shows the most recent `selfScore` per element (not the avera
 
 ## Acceptance Criteria
 
+- AC1: Page shows a summary table with the four required columns
+- AC2: Rows are sorted by Elements Scored descending
+- AC3: Average Self Score is displayed to one decimal place
+- AC4: Clicking a contributor row expands a detail panel with per-element scores
+- AC5: Page is usable at 1280×800 viewport without horizontal scrolling
+
+
 **AC1 — Page shows a summary table with the four required columns**  
 Given an admin user with contributors in their market,  
 When they navigate to `/admin`,  

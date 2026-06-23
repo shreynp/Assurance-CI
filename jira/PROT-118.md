@@ -55,6 +55,13 @@ Both filters are optional and combinable. When neither is supplied, all submissi
 
 ## Acceptance Criteria
 
+- AC1: Admin request returns 200 with all submissions for the admin's market
+- AC2: Each item includes user name, email, selfScore, element, and submittedAt
+- AC3: Non-admin user receives 403
+- AC4: Admin user cannot see submissions from a different market
+- AC5: ?element and ?user query params filter the results correctly
+
+
 **AC1 — Admin request returns 200 with all submissions for the admin's market**  
 Given an admin user authenticated for the "US" market, and 5 submissions exist from contributors in the "US" market,  
 When they call `GET /api/admin/assessments`,  

@@ -43,6 +43,13 @@ When the user has no submissions, the table is replaced by a centred message: **
 
 ## Acceptance Criteria
 
+- AC1: Page renders a table with four named columns
+- AC2: Rows are ordered most-recent-first
+- AC3: Self Score column shows a star rating matching the numeric score
+- AC4: Empty state message is shown when there are no submissions
+- AC5: Page is usable at 1280×800 without horizontal scrolling
+
+
 **AC1 — Page renders a table with four named columns**  
 Given a user has at least one submission,  
 When the `/history` page loads,  

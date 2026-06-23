@@ -35,6 +35,13 @@ After a successful `POST /api/assessments` submission (PROT-101), the ring must 
 
 ## Acceptance Criteria
 
+- AC1: Completeness ring is visible in the top section of /assessment
+- AC2: Ring fill is proportional to the fraction of scored elements
+- AC3: Ring turns green and fills completely when all 5 elements are scored
+- AC4: Ring count updates immediately after a successful submission, without a page reload
+- AC5: Ring is visible at 1280×800 viewport in the top section of the page
+
+
 **AC1 — Completeness ring is visible in the top section of /assessment**  
 Given a user navigates to `/assessment`,  
 When the page loads,  
