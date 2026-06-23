@@ -109,6 +109,7 @@ jobs:
         run: |
           git config user.name "Assurance CI"
           git config user.email "ci@assurance"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git add traceability/ generated/
           git diff --cached --quiet || git commit -m "chore(assurance): record run for ${{ steps.story.outputs.story_id }} @ ${{ github.sha }} [skip ci]"
           git push
