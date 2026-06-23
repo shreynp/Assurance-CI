@@ -6,10 +6,12 @@ How the Assurance CI pipeline invokes Claude, and what infrastructure is wired u
 
 ## Invocation Flow
 
-A commit with a story ID prefix (e.g. `PROT-101: add audit export`) pushed to any branch triggers `assurance.yml`. The pipeline has two jobs: `assurance` (generate → run → record) and `gate` (pass/fail the deploy).
+Opening or updating a pull request triggers `assurance.yml` in the Assurance-CI repo. The pipeline has two jobs: `assurance` (generate → run → record) and `gate` (pass/fail the deploy).
+
+> The downstream `protect-ai` repo uses its own `assurance.yml` which triggers on **push** to any non-main branch. That workflow clones Assurance-CI into `assurance-ci/` and runs the same scripts against the protect app's dev server.
 
 ```
-Developer pushes "PROT-101: ..."
+Developer opens PR (or pushes to non-main branch in protect-ai)
     │
     ▼
 [assurance job]
@@ -154,6 +156,29 @@ Replaces the old raw `git diff HEAD~1 HEAD` dump (8 k cap, unstructured). Produc
 | New (agentic loop) | Sonnet | 3–10 turns | ~$0.10–0.50 |
 
 Self-healing on the first attempt avoids a full re-run of the workflow (~6 min) at the cost of 1–2 additional turns (~$0.05).
+
+---
+
+## Jira File Format Contract
+
+`jira/PROT-NNN.md` files are the source of truth for acceptance criteria. `src/domain/story_loader.py` extracts AC text using this pattern:
+
+```
+_AC_PATTERN = re.compile(r"^-\s+AC\d+:\s+(.+)$", re.MULTILINE)
+```
+
+**Every story file must have bullet-format AC lines immediately after `## Acceptance Criteria`:**
+
+```markdown
+## Acceptance Criteria
+
+- AC1: Short machine-readable description of the criterion
+- AC2: Another criterion
+```
+
+Prose-style bold headings (`**AC1 — Title**`) are for human readability and may coexist, but the parser ignores them. If no `- ACN:` bullets are present, `story_loader.py` raises `ValueError: No acceptance criteria found` and the CI run fails at the generate step.
+
+When served via GitHub Pages, the URL is `https://shreynp.github.io/Assurance-CI/PROT-NNN.md` — fetched by `scripts/fetch_jira_ticket.py` using `JIRA_DATA_URL` env var.
 
 ---
 
