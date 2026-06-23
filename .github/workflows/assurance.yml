@@ -50,35 +50,17 @@ jobs:
           echo "No story ID in commit message — skipping assurance pipeline."
           exit 0
 
-      - name: Get code diff
+      - name: Generate and validate tests
         if: steps.story.outputs.has_story == 'true'
-        id: diff
-        run: |
-          git diff HEAD~1 HEAD -- . > /tmp/commit.diff
-          echo "Diff written to /tmp/commit.diff ($(wc -l < /tmp/commit.diff) lines)"
-
-      - name: Generate feature file + test script
-        if: steps.story.outputs.has_story == 'true'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          STORY_ID: ${{ steps.story.outputs.story_id }}
-        run: |
-          python scripts/generate_tests.py \
-            --story-id "$STORY_ID" \
-            --diff /tmp/commit.diff \
-            --out generated/
-
-      - name: Run generated tests
-        if: steps.story.outputs.has_story == 'true'
-        id: test_run
-        continue-on-error: true   # always write report even on failure
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "/test-generation"
+          claude_args: |
+            --max-turns 10
+            --model claude-sonnet-4-6
         env:
           STORY_ID: ${{ steps.story.outputs.story_id }}
-        run: |
-          python scripts/run_tests.py \
-            --story-id "$STORY_ID" \
-            --generated-dir generated/ \
-            --report-out traceability/reports/
 
       - name: Append traceability record
         if: steps.story.outputs.has_story == 'true'

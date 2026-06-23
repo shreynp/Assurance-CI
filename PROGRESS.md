@@ -17,15 +17,17 @@
 - 2026-06-21: Proto-implement — 66 tests green; all SPEC features covered
 - 2026-06-21: Proto-verify — all 66 tests green; dashboard verified at both viewports; 2 bugs fixed (register.json seeded from demo_records.json; CI workflow fallback SDK corrected openai→anthropic); VERIFIED
 - 2026-06-22: Agentic guide v7 compliance — 116 tests green; added AGENTS.md, CLAUDE.md @import, .claude/agents/ (research-assistant, test-writer, docs-writer), .claude/skills/ship-it/, .claude/hooks.json + hook scripts, .claude/mcp.json, scripts/init.sh, feature_list.json, docs/adr/ (3 ADRs), docs/research/INDEX.md, .github/copilot-instructions.md, llms.txt, CONTRIBUTING.md, .agent-audit/, ruff in pyproject.toml
+- 2026-06-23: claude-code-action@v1 migration — 142 tests green; Phase 1–4 of PLAN.md complete: scripts/build_context.py (18 tests), .claude/settings.json (allowlists + PostToolUse hook), .claude/skills/test-generation/SKILL.md (agentic orchestration skill), generator.py context dict params (36 tests), assurance.yml rewritten to use anthropics/claude-code-action@v1 (single step replaces get-diff + generate + run)
 
 ## What's built
 | Feature | Status | Tests |
 |---------|--------|-------|
-| F1 — AI test generation | ✅ Scripts + generator domain module | 25 generator tests |
+| F1 — AI test generation | ✅ Scripts + generator domain module + context dict path | 36 generator tests |
 | F2 — Test execution | ✅ run_tests.py (bugs fixed) | 5 execution parsing tests |
 | F3 — Traceability register | ✅ register.json + REGISTER.md + Streamlit dashboard | 6 register format tests |
 | F4 — Story-keyed trigger | ✅ assurance.yml + commit_parser | 7 trigger tests |
 | F5 — Deploy gate | ✅ resolve_gate.py | 8 gate tests |
+| F6 — Agentic CI loop | ✅ claude-code-action@v1 + /test-generation skill + build_context.py | 18 context tests |
 
 ## Demo script (2026-06-23)
 **Open with the pain**: "Right now, when a developer ships assessment code, a QA manager has to read the PR, manually write test cases, run them, then paste results into a spreadsheet before an approver can sign off. That takes a day. Here's what happens instead."

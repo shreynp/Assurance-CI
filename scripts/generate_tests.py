@@ -38,11 +38,19 @@ def main():
     parser.add_argument("--story-id", required=True)
     parser.add_argument("--diff", required=True, help="Path to diff file")
     parser.add_argument("--out", required=True, help="Output directory root")
+    parser.add_argument("--context", default=None, help="Path to context.json from build_context.py")
     args = parser.parse_args()
 
     story = load_story(args.story_id, JIRA_DIR)
     # cap diff at 8k chars to stay within prompt token budget; larger diffs are truncated silently
     diff_text = Path(args.diff).read_text()[:8000]
+
+    context: dict | None = None
+    if args.context:
+        try:
+            context = json.loads(Path(args.context).read_text())
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Warning: could not load context file {args.context}: {e}")
 
     out_dir = Path(args.out) / args.story_id
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -57,7 +65,7 @@ def main():
         max_tokens=2048,
         messages=[{
             "role": "user",
-            "content": build_feature_prompt(story, diff_text),
+            "content": build_feature_prompt(story, diff_text, context=context),
         }],
     )
     _feature_block = next((block.text for block in feature_resp.content if block.type == "text"), None)
@@ -80,7 +88,7 @@ def main():
     test_resp = client.messages.create(
         model="claude-opus-4-8",
         max_tokens=4096,
-        messages=[{"role": "user", "content": build_test_script_prompt(story, feature_text, feature_path.name)}],
+        messages=[{"role": "user", "content": build_test_script_prompt(story, feature_text, feature_path.name, context=context)}],
     )
     _test_block = next((block.text for block in test_resp.content if block.type == "text"), None)
     if _test_block is None:

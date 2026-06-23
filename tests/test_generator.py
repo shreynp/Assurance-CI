@@ -120,6 +120,70 @@ class TestBuildTestScriptPrompt:
         assert "custom_name.feature" in prompt
 
 
+# --- context dict path ---
+
+class TestBuildFeaturePromptWithContext:
+    def setup_method(self):
+        self.story = load_story("PROT-101", JIRA_DIR)
+        self.context = {
+            "changed_files": ["src/domain/models.py"],
+            "changed_symbols": {"src/domain/models.py": ["ExecutionReport"]},
+            "callers": {"src/domain/register.py": ["append_record"]},
+            "context_type": "backend",
+            "diff_excerpts": {},
+        }
+
+    def test_context_none_unchanged(self):
+        without = build_feature_prompt(self.story, "diff")
+        with_none = build_feature_prompt(self.story, "diff", context=None)
+        assert without == with_none
+
+    def test_changed_symbols_section_present(self):
+        prompt = build_feature_prompt(self.story, "diff", context=self.context)
+        assert "## Changed Symbols" in prompt
+        assert "ExecutionReport" in prompt
+
+    def test_call_sites_section_present(self):
+        prompt = build_feature_prompt(self.story, "diff", context=self.context)
+        assert "## Call Sites" in prompt
+        assert "append_record" in prompt
+
+    def test_empty_symbols_omits_section(self):
+        ctx = {**self.context, "changed_symbols": {}, "callers": {}}
+        prompt = build_feature_prompt(self.story, "diff", context=ctx)
+        assert "## Changed Symbols" not in prompt
+        assert "## Call Sites" not in prompt
+
+
+class TestBuildTestScriptPromptWithContext:
+    FEATURE_TEXT = "Feature: PROT-101\n  Scenario: AC1\n    Given x\n    When y\n    Then z"
+
+    def setup_method(self):
+        self.story = load_story("PROT-101", JIRA_DIR)
+        self.context = {
+            "changed_files": ["src/domain/models.py", "src/domain/register.py"],
+            "context_type": "backend",
+        }
+
+    def test_context_none_unchanged(self):
+        without = build_test_script_prompt(self.story, self.FEATURE_TEXT)
+        with_none = build_test_script_prompt(self.story, self.FEATURE_TEXT, context=None)
+        assert without == with_none
+
+    def test_test_surface_section_present(self):
+        prompt = build_test_script_prompt(self.story, self.FEATURE_TEXT, context=self.context)
+        assert "## Test Surface" in prompt
+        assert "context_type: backend" in prompt
+
+    def test_test_surface_lists_changed_files(self):
+        prompt = build_test_script_prompt(self.story, self.FEATURE_TEXT, context=self.context)
+        assert "src/domain/models.py" in prompt
+
+    def test_test_surface_appended_after_main_prompt(self):
+        prompt = build_test_script_prompt(self.story, self.FEATURE_TEXT, context=self.context)
+        assert prompt.index("pytest_bdd") < prompt.index("## Test Surface")
+
+
 # --- property: prompt never empty ---
 
 class TestPromptProperties:

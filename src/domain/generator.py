@@ -67,19 +67,36 @@ Story context:
 """
 
 
-def build_feature_prompt(story: Story, diff: str) -> str:
+def build_feature_prompt(story: Story, diff: str, context: dict | None = None) -> str:
     """Return the prompt to send to the model for Gherkin generation."""
     criteria_text = "\n".join(f"- {c}" for c in story.acceptance_criteria)
-    return FEATURE_PROMPT_TEMPLATE.format(
+    prompt = FEATURE_PROMPT_TEMPLATE.format(
         story_id=story.id,
         title=story.title,
         description=story.description,
         criteria=criteria_text,
         diff=diff,
     )
+    if context:
+        symbols = context.get("changed_symbols", {})
+        callers = context.get("callers", {})
+        if symbols:
+            prompt += "\n## Changed Symbols\n"
+            for filepath, names in symbols.items():
+                prompt += f"{filepath}: {', '.join(names)}\n"
+        if callers:
+            prompt += "\n## Call Sites\n"
+            for filepath, imported in callers.items():
+                prompt += f"{filepath}: {', '.join(imported)}\n"
+    return prompt
 
 
-def build_test_script_prompt(story: Story, feature_text: str, feature_filename: str = "") -> str:
+def build_test_script_prompt(
+    story: Story,
+    feature_text: str,
+    feature_filename: str = "",
+    context: dict | None = None,
+) -> str:
     """Return the prompt to send to the model for test-script generation.
 
     Unknown test_type values silently default to the Playwright template — no error is raised.
@@ -88,16 +105,22 @@ def build_test_script_prompt(story: Story, feature_text: str, feature_filename: 
       playwright:  uses sync_api, TARGET_URL env var, 1280×800 viewport
     """
     if story.test_type == "pytest-bdd":
-        return PYTEST_BDD_PROMPT_TEMPLATE.format(
+        prompt = PYTEST_BDD_PROMPT_TEMPLATE.format(
             feature=feature_text,
             description=story.description,
             feature_filename=feature_filename or f"{story.id}.feature",
         )
-    # story.test_type == "playwright" — only two valid variants; unknown types also land here
-    return PLAYWRIGHT_PROMPT_TEMPLATE.format(
-        feature=feature_text,
-        description=story.description,
-    )
+    else:
+        # story.test_type == "playwright" — only two valid variants; unknown types also land here
+        prompt = PLAYWRIGHT_PROMPT_TEMPLATE.format(
+            feature=feature_text,
+            description=story.description,
+        )
+    if context:
+        context_type = context.get("context_type", "backend")
+        changed = context.get("changed_files", [])
+        prompt += f"\n## Test Surface\ncontext_type: {context_type}, changed: {', '.join(changed)}\n"
+    return prompt
 
 
 def strip_fences(text: str) -> str:
