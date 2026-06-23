@@ -8,11 +8,11 @@ jobs:
     name: Generate → Run → Record
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2   # need parent commit for diff
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload gate result
         if: steps.story.outputs.has_story == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: gate-result
           path: /tmp/gate.json
@@ -112,9 +112,9 @@ jobs:
     needs: assurance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: gate-result
           path: /tmp/
