@@ -7,8 +7,8 @@
     },
     "playwright": {
       "command": "npx",
-      "args": ["@anthropic-ai/mcp-playwright"],
-      "description": "E2E testing and UI verification for Streamlit dashboard"
+      "args": ["@playwright/mcp@latest", "--headless"],
+      "description": "E2E browser automation for UI verification"
     },
     "fetch": {
       "command": "npx",
