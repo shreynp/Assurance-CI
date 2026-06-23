@@ -114,7 +114,30 @@ Edit only `generated/$STORY_ID/test_$STORY_ID.py` or `generated/$STORY_ID/confte
 Do NOT modify the `.feature` file — Gherkin is the AC source of truth.
 Do NOT modify `src/domain/`.
 
-### 7 — Stop
+### 7 — Write meta.json
+
+After the tests pass (or after the final self-heal attempt), write
+`generated/$STORY_ID/meta.json`. This file is required by `append_record.py`,
+which reads it unconditionally and will raise `FileNotFoundError` if absent.
+
+```json
+{
+  "feature_file": "generated/<STORY_ID>/<STORY_ID>.feature",
+  "test_script": "generated/<STORY_ID>/test_<STORY_ID>.py"
+}
+```
+
+Example for `STORY_ID=PROT-111`:
+```json
+{
+  "feature_file": "generated/PROT-111/PROT-111.feature",
+  "test_script": "generated/PROT-111/test_PROT-111.py"
+}
+```
+
+Write this file regardless of whether tests passed or failed.
+
+### 8 — Stop
 
 Downstream workflow steps (`append_record.py`, `render_register.py`, git push,
 `resolve_gate.py`) run outside this skill. Do not call them here.
