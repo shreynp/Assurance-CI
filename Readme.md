@@ -74,3 +74,13 @@ resolve_gate.py    ──►  gate.json                            (status: gree
 |--------|---------|
 | `ANTHROPIC_API_KEY` | Claude API — test generation |
 | `GITHUB_TOKEN` | Auto-provided — PR comments and commits |
+
+## GitHub App prerequisite
+
+`claude-code-action@v1` authenticates via OIDC token exchange through the **Claude Code GitHub App**. The app must be installed on the target repository or the action fails with:
+
+```
+App token exchange failed: 401 Unauthorized - Claude Code is not installed on this repository.
+```
+
+Install it at **https://github.com/apps/claude** and grant access to the target repo before running the workflow.
