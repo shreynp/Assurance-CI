@@ -6,28 +6,66 @@ How the Assurance CI pipeline invokes Claude, and what infrastructure is wired u
 
 ## Invocation Flow
 
-Opening or updating a pull request triggers `assurance.yml` in the Assurance-CI repo. The pipeline has two jobs: `assurance` (generate → run → record) and `gate` (pass/fail the deploy).
+Three events trigger `assurance.yml` in the Assurance-CI repo:
+- **`pull_request`** — any PR open/sync against any branch
+- **`workflow_dispatch`** — manual run from the Actions UI or CLI, with an optional `story_id` input that overrides commit-message detection
+- **Push to non-main in protect-ai** — the downstream `protect-ai` repo's own `assurance.yml` triggers on push, clones Assurance-CI into `assurance-ci/`, and runs the same scripts against the protect app's dev server
 
-> The downstream `protect-ai` repo uses its own `assurance.yml` which triggers on **push** to any non-main branch. That workflow clones Assurance-CI into `assurance-ci/` and runs the same scripts against the protect app's dev server.
+> ⚠️ **Known limitation — `pull_request` does not fire for GITHUB_TOKEN-created PRs**
+>
+> GitHub suppresses `pull_request` events (including `synchronize`) for any action performed
+> by `GITHUB_TOKEN`. Since the Assurance CI workflow auto-creates PRs using
+> `GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}`, that PR's `opened` event is swallowed and
+> subsequent human pushes to the same branch may also not reliably fire `synchronize`.
+>
+> **Workaround (reliable today):** use `workflow_dispatch` to manually trigger the pipeline:
+> ```bash
+> gh workflow run assurance.yml --ref <branch> --field story_id=PROT-NNN
+> ```
+> **Permanent fix:** replace `secrets.GITHUB_TOKEN` with a dedicated PAT stored as
+> `ACTIONS_PAT` — events triggered by a PAT do fire `pull_request` workflow triggers.
+> Alternatively, open the PR manually before pushing commits (not via the workflow).
+
+The pipeline has two jobs: `assurance` (generate → run → record → PR comment) and `gate` (pass/fail the deploy).
+
+**Required permissions** (declared in `assurance.yml`):
+```yaml
+permissions:
+  contents: write       # commit traceability artifacts back to the repo
+  pull-requests: write  # create or comment on the assurance PR
+  id-token: write       # OIDC auth (Workload Identity Federation for cloud resources)
+```
+
+**Manual dispatch via CLI:**
+```bash
+gh workflow run assurance.yml --ref <branch> --field story_id=PROT-105
+```
 
 ```
-Developer opens PR (or pushes to non-main branch in protect-ai)
+Developer opens PR  OR  workflow_dispatch  OR  push to non-main (protect-ai)
     │
     ▼
 [assurance job]
     │
+    ├─ checkout (fetch-depth: 0, token: GITHUB_TOKEN)
+    │
     ├─ commit_parser.extract_story_id()          ← deterministic Python
-    │     no story ID → exit 0 (skip)
+    │     priority: DISPATCH_STORY_ID → git commit → PR title → branch name
+    │     no story ID found → exit 0 (skip)
+    │
+    ├─ fetch_jira_ticket.py                      ← deterministic Python
+    │     fetches ${JIRA_DATA_URL}/PROT-NNN.md from GitHub Pages
+    │     writes to jira/ for downstream steps
     │
     ├─ claude-code-action@v1                     ← agentic loop (max 10 turns)
     │     prompt: "/test-generation"
-    │     env: STORY_ID=PROT-101
+    │     env: STORY_ID=PROT-101, JIRA_DIR=jira, BASE_URL=http://localhost:3000
     │     │
     │     │  MCPs auto-loaded: context7, playwright, fetch
     │     │  Permissions: settings.json allowlist (no prompts)
     │     │
     │     └─ /test-generation skill executes:
-    │           1. Read jira/PROT-101.md
+    │           1. Read ${JIRA_DIR:-jira}/PROT-101.md
     │           2. Check DOMAIN.md (ubiquitous language)
     │           3. Bash → build_context.py → /tmp/context.json
     │           4. Invoke test-writer sub-agent
@@ -43,11 +81,18 @@ Developer opens PR (or pushes to non-main branch in protect-ai)
     ├─ render_register.py                        ← deterministic Python
     ├─ git commit + push traceability artifacts  ← deterministic shell
     │     [pre-commit.sh: secrets check + domain purity check]
-    └─ resolve_gate.py → /tmp/gate.json          ← deterministic Python
+    │     commit message includes [skip ci] to prevent re-triggering the pipeline
+    ├─ resolve_gate.py → /tmp/gate.json          ← deterministic Python (continue-on-error)
+    ├─ build_pr_body.py → /tmp/pr_body.md        ← deterministic Python
+    │     renders gate status, AC coverage, and story link into PR markdown
+    └─ gh pr create / gh pr comment              ← deterministic shell
+          creates PR if none exists; comments assurance report on existing PR
     │
     ▼
 [gate job]
+    ├─ download-artifact (continue-on-error — absent when no story ID)
     └─ reads gate.json → exits 0 (green) or 1 (red)
+          missing gate.json → exit 0 (no story → pass)
 ```
 
 ---
@@ -85,7 +130,7 @@ MCP tools (browser control, doc lookups, fetch) do not require separate allowlis
 
 One skill is invoked in CI. The `prompt: "/test-generation"` field in `assurance.yml` is the entry point. Claude reads the skill file from the checked-out repo and follows its 7-step protocol:
 
-1. Read the Jira story file (`jira/$STORY_ID.md`)
+1. Read the Jira story file (`${JIRA_DIR:-jira}/$STORY_ID.md`)
 2. Resolve `DOMAIN.md` for ubiquitous language grounding
 3. Run `build_context.py` → structured JSON (changed files, AST-level symbols, callers, diff excerpts)
 4. Invoke the `test-writer` sub-agent with combined context
@@ -94,6 +139,12 @@ One skill is invoked in CI. The `prompt: "/test-generation"` field in `assurance
 7. Stop — downstream steps handle traceability
 
 The skill enforces two hard constraints: never modify `src/domain/`, and write only to `generated/$STORY_ID/`.
+
+**Generated test conventions** (enforced from PROT-105 live-run learnings):
+- `scenarios()` must reference `"{STORY_ID}.feature"` by filename — never a generic name
+- HTTP tests: always use `httpx` (not `requests`); always read `BASE_URL = os.environ.get("BASE_URL", "http://localhost:3000")`
+- Auth credentials must come from env vars with safe local defaults: `os.environ.get("TEST_BEARER_TOKEN", "valid-test-token")`
+- Never hardcode URLs or tokens — CI injects real values; local runs fall back to defaults
 
 ### Agents — `.claude/agents/`
 
@@ -121,6 +172,38 @@ One git hook fires outside the agentic loop:
 | Hook | When | Script | Checks |
 |------|------|--------|--------|
 | **pre-commit** | On `git commit` (traceability step) | `pre-commit.sh` | (1) Leaked secrets in staged diff — hard fail. (2) I/O imports added to `src/domain/` — hard fail. |
+
+---
+
+## Workflow Environment Variables
+
+Variables injected by `assurance.yml` into the agentic step and downstream scripts:
+
+| Variable | Default | Set by | Purpose |
+|----------|---------|--------|---------|
+| `STORY_ID` | — | CI (required) | Jira story identifier, e.g. `PROT-105` |
+| `JIRA_DIR` | `jira` | CI | Directory containing story markdown files; allows the workflow to point at a different fetch target |
+| `BASE_URL` | `http://localhost:3000` | CI | Live server URL for HTTP tests; CI can override with real host |
+| `TARGET_URL` | `http://localhost:3000` | CI | Alias for `BASE_URL` used by some test patterns |
+| `TEST_BEARER_TOKEN` | `valid-test-token` | CI | Auth token for authenticated endpoint tests; real value injected from secrets |
+| `JIRA_DATA_URL` | `https://shreynp.github.io/Assurance-CI` | CI | GitHub Pages base URL for `fetch_jira_ticket.py` |
+| `DISPATCH_STORY_ID` | — | `workflow_dispatch` input | Overrides commit-message detection when set via manual trigger |
+| `ANTHROPIC_API_KEY` | — | Secret (required) | API key for the `claude-code-action@v1` agentic loop |
+
+---
+
+## Scripts — `scripts/`
+
+| Script | Called by | Purpose |
+|--------|-----------|---------|
+| `fetch_jira_ticket.py` | Workflow step | Fetches `PROT-NNN.md` from GitHub Pages (`JIRA_DATA_URL`) and writes it into `jira/` |
+| `build_context.py` | Skill step 3 | Produces `/tmp/context.json` with changed files, symbols, callers, and diff excerpts |
+| `append_record.py` | Workflow step | Appends a traceability record to `traceability/register.json` |
+| `render_register.py` | Workflow step | Renders `register.json` → `REGISTER.md` markdown table |
+| `resolve_gate.py` | Workflow step | Reads `register.json` and writes pass/fail decision to `/tmp/gate.json` |
+| `build_pr_body.py` | Workflow step | Renders gate status, AC coverage, and story link into `/tmp/pr_body.md` for PR creation |
+| `generate_tests.py` | Local / legacy | Direct SDK test generation (pre-agentic; kept for local dev fallback) |
+| `run_tests.py` | Local / legacy | Runs generated tests and prints results |
 
 ---
 

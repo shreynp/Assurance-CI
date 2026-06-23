@@ -2,6 +2,50 @@
 
 ---
 
+## 2026-06-23 — PROT-105 Live CI Run (protect-ai backport)
+
+Ten improvements discovered running the pipeline against the real protect-ai repo for story PROT-105. All were backported to `assurance.yml` and the test-generation skill.
+
+**1. `workflow_dispatch` is essential for debugging CI without creating a PR**
+Adding the `workflow_dispatch` trigger with an optional `story_id` input lets you fire the pipeline manually from the CLI (`gh workflow run`) or the Actions UI. Without it, every test of the pipeline requires opening a real PR — slow and polluting. Add this trigger to any CI workflow where you'll need to iterate on the pipeline itself.
+
+**2. `id-token: write` is required for OIDC auth even when not using Workload Identity**
+The permission must be declared at the job level or `claude-code-action@v1` may fail to authenticate in certain runner configurations. Add it alongside `contents: write` and `pull-requests: write` as a baseline for any agentic CI job.
+
+**3. `fetch-depth: 0` + explicit `token` on checkout**
+`fetch-depth: 2` (the previous default) breaks `git log` lookups for branch-name extraction and can cause push failures. `fetch-depth: 0` with `token: ${{ secrets.GITHUB_TOKEN }}` ensures the full history is available and push auth works without a separate credentials step.
+
+**4. Story ID extraction needs a four-source priority chain**
+Commit message alone misses manual dispatch runs and branches where the commit message doesn't carry the ID. Correct priority: `DISPATCH_STORY_ID` (manual override) → commit message → PR title → branch name (e.g. `feat/PROT-105-...`). The branch-name fallback rescued several runs during PROT-105 testing.
+
+**5. `fetch_jira_ticket.py` decouples the pipeline from local file presence**
+In the protect-ai repo, `jira/` files don't exist — they live in Assurance-CI's GitHub Pages. Adding an explicit fetch step (`scripts/fetch_jira_ticket.py` using `JIRA_DATA_URL`) makes the pipeline self-contained: it works from any repo that references a story ID, not just repos that also own the ticket files.
+
+**6. `BASE_URL`, `TARGET_URL`, and `JIRA_DIR` must be passed explicitly to the agentic step**
+`claude-code-action@v1` does not inherit the runner's environment automatically. All variables the generated tests will need must be declared in the `env:` block of the agentic step. Missing `JIRA_DIR` causes the skill to look in the wrong directory; missing `BASE_URL` causes HTTP tests to hardcode `localhost`.
+
+**7. `[skip ci]` on the traceability commit is mandatory**
+The traceability `git commit + push` step re-triggers the pipeline on the same branch if `[skip ci]` is absent. This creates a feedback loop: the pipeline generates a commit, which triggers the pipeline, which generates another commit. One keyword in the commit message breaks the loop.
+
+**8. `continue-on-error: true` on gate write and artifact download**
+If the gate script fails (e.g. the register is empty because no tests ran), a hard failure here blocks the pipeline from reaching the PR comment step — leaving no evidence for the developer. `continue-on-error` lets the pipeline reach the reporting steps even when gate resolution fails. The `gate` job handles a missing `gate.json` by passing.
+
+**9. PR creation / comment belongs in the pipeline, not as a manual step**
+Adding `build_pr_body.py` → `gh pr create / gh pr comment` as deterministic shell steps means every assurance run leaves a structured report on the PR with no manual action required. Without this, the gate result exists only in the workflow logs — invisible to reviewers.
+
+**10. `scenarios()` must name the `.feature` file explicitly**
+The pytest-bdd `scenarios()` call used a generic filename (`test.feature`) in early generated tests. When the fixture generates `PROT-105.feature`, pytest-bdd can't find it and the test fails with a conftest error that looks like a test failure. The fix — `scenarios("PROT-105.feature")` — is now enforced in the skill's generated test conventions. The same lesson applies to `httpx` over `requests` and env-var auth tokens: conventions must be written into the skill prompt, not left to agent inference.
+
+---
+
+### One rule that would have prevented the biggest PROT-105 time sink
+
+> Every env var that a generated test will read must be declared in the `env:` block of the `claude-code-action@v1` step — not just set in the runner environment.
+
+Environment variables set in earlier steps or at the job level are not automatically inherited by `claude-code-action@v1`. This caused `JIRA_DIR` lookups to fail silently and `BASE_URL` to resolve to nothing, producing connection-refused errors in generated HTTP tests on the first CI run.
+
+---
+
 ## 2026-06-21 — Proto-implement + Proto-verify
 
 ### What the next prototype should not relearn
