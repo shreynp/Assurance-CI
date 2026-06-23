@@ -26,6 +26,7 @@ permissions:
   contents: write
   pull-requests: write
   id-token: write
+  actions: read
 
 jobs:
   assurance:
@@ -131,9 +132,12 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: "/test-generation"
+          show_full_output: "true"
           claude_args: |
             --max-turns 10
             --model claude-sonnet-4-6
+            --verbose
+            --dangerouslySkipPermissions
         env:
           STORY_ID: ${{ steps.story.outputs.story_id }}
           BASE_URL: http://localhost:3000
