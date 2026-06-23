@@ -42,6 +42,12 @@ Add a `GET /api/user/me` route handler that reads the Bearer token from the `Aut
 
 ## Acceptance Criteria
 
+- AC1: Valid Bearer token returns HTTP 200 with id, name, email, market, role, and sessionExpiresAt
+- AC2: Request with no Authorization header returns HTTP 401 with code AUTH_REQUIRED and error Unauthorized
+- AC3: role field is one of the three valid string values admin, contributor, or viewer
+- AC4: market field matches the user's assigned market code
+- AC5: sessionExpiresAt is a future ISO-8601 UTC timestamp for an active session
+
 **AC1 — Valid session token returns the full user profile**  
 Given a `GET /api/user/me` request with a valid Bearer token for user `user_abc123`,  
 When the request is processed,  
