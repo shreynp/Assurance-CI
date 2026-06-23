@@ -98,21 +98,71 @@ Rules passed to the agent:
 pytest generated/$STORY_ID/ -v --tb=short
 ```
 
-### 6 — Self-heal on failure (max 2 rounds)
+### 6 — Classify failures: fix the test or report and stop
 
-If pytest exits non-zero, diagnose by failure type before editing:
+If pytest exits non-zero, read every `FAILED` / `ERROR` entry and classify before acting.
+There are exactly two paths.
 
-| Failure signature | Fix |
-|-------------------|-----|
-| `httpx.LocalProtocolError` | `conftest.py` `httpx_safe` fixture is missing or incomplete — regenerate it |
-| `AssertionError` on status code | Re-read the actual API source; adjust assertion to match implementation; add a comment noting any AC mismatch |
-| `StepNotImplementedError` / pending step | Add the missing `@given/@when/@then` to the test file |
-| `ImportError` | Check `httpx` and `pytest-bdd` are installed (`pip show httpx pytest-bdd`) |
-| `scenarios()` file not found | Verify the exact `.feature` filename matches the `scenarios()` call |
+---
+
+#### Category A — Test has a technical defect → fix it (max 2 rounds)
+
+The test crashes before it can meaningfully assert, or it calls a Playwright/Python API
+incorrectly. The feature may or may not be implemented correctly — you cannot tell yet.
+
+Fix and re-run if ANY failure matches these signatures:
+
+| Signature | Fix |
+|-----------|-----|
+| `Locator.inner_text: Error: Node is not an HTMLElement` | Test calls `.inner_text()` on an SVG node. Fix: use `.text_content()` instead, or add a hidden `<span data-testid="...">` mirror in the component (document the mismatch in a comment). |
+| `StepNotImplementedError` / pending step | Add the missing `@given/@when/@then` step implementation. |
+| `ImportError` / `ModuleNotFoundError` | Fix the import. |
+| `scenarios()` `FileNotFoundError` | Verify the exact `.feature` filename matches the `scenarios()` call. |
+| `httpx.LocalProtocolError` | Regenerate the `httpx_safe` autouse fixture in `conftest.py`. |
+| Exception traceback points into `conftest.py` or a fixture function (not the test body) | Fix the fixture. |
+| `AssertionError: Locator expected to be visible` for a `data-testid` that **does** exist somewhere on the page | The locator is too specific (e.g. scoped to the wrong ancestor). Broaden the selector. Confirm by running: `page.locator('[data-testid="<id>"]').count()` — if > 0 anywhere, it's a locator bug. |
 
 Edit only `generated/$STORY_ID/test_$STORY_ID.py` or `generated/$STORY_ID/conftest.py`.
 Do NOT modify the `.feature` file — Gherkin is the AC source of truth.
-Do NOT modify `src/domain/`.
+Do NOT modify `src/` or `src/domain/`.
+
+---
+
+#### Category B — Implementation does not meet AC → record and stop
+
+The test ran correctly but the feature behaved differently than the AC specifies.
+Do NOT iterate. Do NOT try to adjust assertions to match a broken implementation.
+
+Stop immediately if the remaining failures show:
+
+- `AssertionError` at an assertion line in the test body — the correct element was found but the value / state is wrong.
+- `data-testid` genuinely absent from the DOM — confirmed by checking `page.locator('[data-testid="<id>"]').count() == 0` — meaning the feature is not implemented or is placed incorrectly in a way that the test cannot work around.
+- Count / state mismatch after test setup completed without error (fixture / conftest ran cleanly, only the assertion failed).
+
+For Category B:
+
+1. Write `generated/$STORY_ID/gate_notes.md` with this structure:
+
+```markdown
+# Gate Notes — <STORY_ID>
+
+## Implementation gaps found
+
+| Test | AC covered | Expected | Observed |
+|------|-----------|----------|----------|
+| test_ac1_... | AC1: ... | element visible in header | element absent from DOM |
+| ... | ... | ... | ... |
+
+## Recommendation
+
+The implementation does not yet satisfy the above acceptance criteria.
+Run `/assurance-resolve` to fix the code and re-run assurance.
+```
+
+2. Write `meta.json` (step 7).
+3. **Stop.** Do not call any more tools. The downstream workflow steps will record the
+   gate-red result from the pytest report written by the separate "Run generated tests"
+   workflow step.
 
 ### 7 — Write meta.json
 
