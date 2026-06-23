@@ -4,25 +4,30 @@ Story → Commit → Generated Tests → Execution → Gate traceability pipelin
 
 ## Triggering the workflow
 
-**On push** — any commit to a PR branch fires the pipeline automatically via `pull_request: synchronize`. No special commit message needed; the story ID is detected from (in order): workflow dispatch input → commit message → PR title → branch name (e.g. `feat/PROT-105-...`).
-
-**Manual dispatch via CLI:**
+**Manual dispatch via CLI (preferred):**
 ```bash
 gh workflow run assurance.yml \
-  --ref <branch> \
+  --repo shreynp/protect-ai \
+  --ref feat/PROT-105-<slug> \
   --field story_id=PROT-105
 ```
 
 **Manual dispatch via GitHub UI:** Actions → Assurance CI → Run workflow → select branch → enter story ID.
 
+**Push to a PR branch (fallback)** — fires automatically via the `pull_request` event. The story ID is detected from (in order): workflow dispatch input → commit message → PR title → branch name. Note: GitHub suppresses `pull_request` events for PRs auto-created by `GITHUB_TOKEN`; use manual dispatch in that case. See [CI-ARCHITECTURE.md](docs/CI-ARCHITECTURE.md) for the known limitation and permanent fix.
+
+**Commit message format:** `feat(PROT-NNN): <story title>` — the ticket ID must appear in the commit message for the pipeline to detect the story.
+
 ## How it works
 
-1. A commit message containing a story ID (e.g. `PROT-101: add endpoint`) triggers the pipeline.
-2. The story markdown is fetched from the `jira/` directory.
-3. Claude generates a Gherkin feature file and a pytest-bdd or Playwright test script.
-4. Tests are executed by pytest, targeting `BASE_URL` / `TARGET_URL` (default: `http://localhost:3000`).
-5. Results are appended to `traceability/register.json`.
+1. The story ID is resolved (dispatch input → commit message → PR title → branch name).
+2. The story markdown is fetched from `jira/PROT-NNN.md`.
+3. Claude generates a Gherkin feature file (`generated/<ID>/<ID>.feature`) and a pytest-bdd or Playwright test script (`generated/<ID>/test_<id>.py`).
+4. Tests run via pytest against `BASE_URL` / `TARGET_URL` (default: `http://localhost:3000`).
+5. Results are appended to `traceability/register.json` and committed back to the branch.
 6. The gate job exits 0 (green / allow merge) or 1 (red / block merge).
+
+**If the gate is red:** run `/assurance-resolve PROT-NNN` in Claude Code on the protect repo — it pulls the CI-committed artifacts, diagnoses failing scenarios, and guides fixing only what failed.
 
 ## Traceability dashboard
 
@@ -60,6 +65,7 @@ resolve_gate.py    ──►  gate.json                            (status: gree
 | `run_tests.py` | `GITHUB_SHA` | `local` | Commit SHA recorded in report |
 | `run_tests.py` | `GITHUB_ACTOR` | `$USER` | Author recorded in report |
 | `run_tests.py` | `RUNNER_OS` | `local` | Environment string |
+| `run_tests.py` | `TEST_BEARER_TOKEN` | `valid-test-token` | Auth token for authenticated endpoint tests; CI injects the real value from secrets |
 | `build_pr_body.py` | `JIRA_DATA_URL` | *(optional)* | Renders ticket ID as hyperlink when set |
 
 **Error behaviors:**
@@ -67,6 +73,7 @@ resolve_gate.py    ──►  gate.json                            (status: gree
 - Missing acceptance criteria in story → `ValueError` from `load_story`
 - Claude returning no text block → prints `ERROR:` message and exits 1
 - Duplicate register records for same story+commit → last appended record wins
+- Zero tests collected (0 passed, 0 failed) → red gate — an empty run is not evidence of passing
 
 ## CI secrets required
 
