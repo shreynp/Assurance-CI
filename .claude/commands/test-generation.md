@@ -4,7 +4,7 @@ description: >
   Generate and validate tests for a changed story. Use when running the assurance
   CI pipeline, when STORY_ID is set, or when asked to generate tests for a JIRA story.
   Handles context building, feature file creation, pytest/BDD/Playwright test generation,
-  execution, and self-healing on failures. Invokes the test-writer agent for writing.
+  and execution. Reports failures — does not auto-heal. Invokes the test-writer agent for writing.
 ---
 
 # Test Generation Skill
@@ -98,75 +98,43 @@ Rules passed to the agent:
 pytest generated/$STORY_ID/ -v --tb=short
 ```
 
-### 6 — Classify failures: fix the test or report and stop
+### 6 — Report failures and stop
 
-If pytest exits non-zero, read every `FAILED` / `ERROR` entry and classify before acting.
-There are exactly two paths.
+If pytest exits non-zero, read every `FAILED` / `ERROR` entry.
 
----
+Do NOT attempt any fixes. Do NOT re-run pytest. Do NOT edit any test or source file.
 
-#### Category A — Test has a technical defect → fix it (max 2 rounds)
+Classify each failure as one of:
 
-The test crashes before it can meaningfully assert, or it calls a Playwright/Python API
-incorrectly. The feature may or may not be implemented correctly — you cannot tell yet.
+| Class | Signature |
+|-------|-----------|
+| **Locator bug** | `Locator.inner_text: Error: Node is not an HTMLElement`; `AssertionError: Locator expected to be visible` where `data-testid` exists elsewhere on the page; wrong ancestor selector |
+| **Implementation gap** | `AssertionError` at an assertion in the test body; `data-testid` absent from DOM (`page.locator('[data-testid="..."]').count() == 0`); count/state mismatch after fixtures ran cleanly |
+| **Test infrastructure** | `ImportError`; `ModuleNotFoundError`; `StepNotImplementedError`; `scenarios()` `FileNotFoundError`; traceback in conftest fixture body |
 
-Fix and re-run if ANY failure matches these signatures:
-
-| Signature | Fix |
-|-----------|-----|
-| `Locator.inner_text: Error: Node is not an HTMLElement` | Test calls `.inner_text()` on an SVG node. Fix: use `.text_content()` instead, or add a hidden `<span data-testid="...">` mirror in the component (document the mismatch in a comment). |
-| `StepNotImplementedError` / pending step | Add the missing `@given/@when/@then` step implementation. |
-| `ImportError` / `ModuleNotFoundError` | Fix the import. |
-| `scenarios()` `FileNotFoundError` | Verify the exact `.feature` filename matches the `scenarios()` call. |
-| `httpx.LocalProtocolError` | Regenerate the `httpx_safe` autouse fixture in `conftest.py`. |
-| Exception traceback points into `conftest.py` or a fixture function (not the test body) | Fix the fixture. |
-| `AssertionError: Locator expected to be visible` for a `data-testid` that **does** exist somewhere on the page | The locator is too specific (e.g. scoped to the wrong ancestor). Broaden the selector. Confirm by running: `page.locator('[data-testid="<id>"]').count()` — if > 0 anywhere, it's a locator bug. |
-
-Edit only `generated/$STORY_ID/test_$STORY_ID.py` or `generated/$STORY_ID/conftest.py`.
-Do NOT modify the `.feature` file — Gherkin is the AC source of truth.
-Do NOT modify `src/` or `src/domain/`.
-
----
-
-#### Category B — Implementation does not meet AC → record and stop
-
-The test ran correctly but the feature behaved differently than the AC specifies.
-Do NOT iterate. Do NOT try to adjust assertions to match a broken implementation.
-
-Stop immediately if the remaining failures show:
-
-- `AssertionError` at an assertion line in the test body — the correct element was found but the value / state is wrong.
-- `data-testid` genuinely absent from the DOM — confirmed by checking `page.locator('[data-testid="<id>"]').count() == 0` — meaning the feature is not implemented or is placed incorrectly in a way that the test cannot work around.
-- Count / state mismatch after test setup completed without error (fixture / conftest ran cleanly, only the assertion failed).
-
-For Category B:
-
-1. Write `generated/$STORY_ID/gate_notes.md` with this structure:
+Write `generated/$STORY_ID/gate_notes.md`:
 
 ```markdown
 # Gate Notes — <STORY_ID>
 
-## Implementation gaps found
+## Test results
 
-| Test | AC covered | Expected | Observed |
-|------|-----------|----------|----------|
-| test_ac1_... | AC1: ... | element visible in header | element absent from DOM |
+| Test | Result | Class | Evidence |
+|------|--------|-------|----------|
+| test_ac1_... | FAILED | Locator bug | Locator scoped to wrong ancestor |
+| test_ac2_... | FAILED | Implementation gap | data-testid absent from DOM |
 | ... | ... | ... | ... |
 
 ## Recommendation
 
-The implementation does not yet satisfy the above acceptance criteria.
-Run `/assurance-resolve` to fix the code and re-run assurance.
+Run `/assurance-resolve` to fix the identified issues and re-run assurance.
 ```
 
-2. Write `meta.json` (step 7).
-3. **Stop.** Do not call any more tools. The downstream workflow steps will record the
-   gate-red result from the pytest report written by the separate "Run generated tests"
-   workflow step.
+Then write `meta.json` (step 7) and **stop**. Do not call any more tools.
 
 ### 7 — Write meta.json
 
-After the tests pass (or after the final self-heal attempt), write
+After tests run (pass or fail), write
 `generated/$STORY_ID/meta.json`. This file is required by `append_record.py`,
 which reads it unconditionally and will raise `FileNotFoundError` if absent.
 
