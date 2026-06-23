@@ -69,8 +69,9 @@ Build context:
   diff_excerpts: <dict>
 
 Write output to: generated/$STORY_ID/
-  - generated/$STORY_ID/$STORY_ID.feature  (Gherkin)
-  - generated/$STORY_ID/test_$STORY_ID.py  (pytest-bdd or Playwright)
+  - generated/$STORY_ID/$STORY_ID.feature    (Gherkin)
+  - generated/$STORY_ID/conftest.py          (shared fixtures — always generate this)
+  - generated/$STORY_ID/test_$STORY_ID.py   (pytest-bdd or Playwright)
 ```
 
 Rules passed to the agent:
@@ -83,12 +84,13 @@ Rules passed to the agent:
 - When DOMAIN.md is present, entity assertions must use field names from DOMAIN.md
   (e.g. `story_id`, `commit_sha`, `gate_result`, not ad-hoc names)
 
-**Generated test conventions (enforced from PROT-105 learnings):**
+**Generated test conventions:**
 - `scenarios()` must reference `"{STORY_ID}.feature"` by name — never a generic filename
-- HTTP tests: always use `httpx` (not `requests`); always read `BASE_URL = os.environ.get("BASE_URL", "http://localhost:3000")`
-- Auth tokens and test credentials must come from env vars with safe defaults:
-  `VALID_BEARER_TOKEN = os.environ.get("TEST_BEARER_TOKEN", "valid-test-token")`
+- HTTP tests: always use `httpx`; always read `BASE_URL = os.environ.get("BASE_URL", "http://localhost:3000")`
+- Auth tokens from env vars with safe defaults: `VALID_BEARER_TOKEN = os.environ.get("TEST_BEARER_TOKEN", "valid-test-token")`
 - Never hardcode URLs or tokens — CI injects real values; local runs fall back to defaults
+- The `context` fixture lives in `conftest.py` — the test file imports it, does not redefine it
+- `conftest.py` must include the `httpx_safe` autouse fixture (see test-writer agent for template)
 
 ### 5 — Run generated tests
 
@@ -98,16 +100,19 @@ pytest generated/$STORY_ID/ -v --tb=short
 
 ### 6 — Self-heal on failure (max 2 rounds)
 
-If pytest exits non-zero:
+If pytest exits non-zero, diagnose by failure type before editing:
 
-1. Read the full pytest output
-2. Identify the failing step(s) or assertion(s)
-3. Edit `generated/$STORY_ID/test_$STORY_ID.py` to fix the issue
-4. Re-run `pytest generated/$STORY_ID/ -v --tb=short`
-5. Repeat once more if still failing — then stop and report the failure
+| Failure signature | Fix |
+|-------------------|-----|
+| `httpx.LocalProtocolError` | `conftest.py` `httpx_safe` fixture is missing or incomplete — regenerate it |
+| `AssertionError` on status code | Re-read the actual API source; adjust assertion to match implementation; add a comment noting any AC mismatch |
+| `StepNotImplementedError` / pending step | Add the missing `@given/@when/@then` to the test file |
+| `ImportError` | Check `httpx` and `pytest-bdd` are installed (`pip show httpx pytest-bdd`) |
+| `scenarios()` file not found | Verify the exact `.feature` filename matches the `scenarios()` call |
 
-Do NOT modify the `.feature` file during self-heal (Gherkin is the source of truth).
-Do NOT modify `src/domain/` during self-heal.
+Edit only `generated/$STORY_ID/test_$STORY_ID.py` or `generated/$STORY_ID/conftest.py`.
+Do NOT modify the `.feature` file — Gherkin is the AC source of truth.
+Do NOT modify `src/domain/`.
 
 ### 7 — Stop
 

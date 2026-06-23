@@ -1,3 +1,15 @@
+# Assurance CI — Story → Commit → Test → Gate pipeline
+#
+# Pipeline stages:
+#   1. Extract story ID from commit message (PROT-NNN pattern)
+#   2. Fetch Jira story markdown from GitHub Pages (JIRA_DATA_URL)
+#   3. Generate + validate tests via claude-code-action@v1 (/test-generation skill)
+#   4. Append traceability record to traceability/register.json
+#   5. Resolve gate: green (all pass) or red (any fail) → gate job enforces exit-1
+#   6. Build PR body and create/update PR with assurance report
+#
+# Required secrets: ANTHROPIC_API_KEY, GITHUB_TOKEN (auto-provided)
+# Gate exit-code contract: gate job exits 0 (green) or 1 (red, blocks merge)
 name: Assurance CI
 
 on:
@@ -37,7 +49,7 @@ jobs:
       - name: Install Playwright browsers
         run: playwright install chromium --with-deps
 
-      - name: Extract story ID from commit
+      - name: Extract story ID
         id: story
         run: |
           python - <<'EOF'
@@ -48,8 +60,16 @@ jobs:
           git_msg = subprocess.check_output(["git", "log", "-1", "--format=%s"], text=True).strip()
           pr_title = os.environ.get("PR_TITLE", "")
           branch = os.environ.get("BRANCH_NAME", "")
-          sid = dispatch_id or extract_story_id(git_msg) or extract_story_id(pr_title) or extract_story_id(branch)
-          print(f"Story ID: {sid or '(none)'}")
+          sources = [
+              ("dispatch", dispatch_id),
+              ("commit",   extract_story_id(git_msg)),
+              ("pr_title", extract_story_id(pr_title)),
+              ("branch",   extract_story_id(branch)),
+          ]
+          sid, source = next(((v, k) for k, v in sources if v), (None, None))
+          print(f"Story ID: {sid or '(none)'} (source: {source or 'none'})")
+          print(f"  dispatch={dispatch_id!r}  commit={git_msg!r}")
+          print(f"  pr_title={pr_title!r}  branch={branch!r}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"story_id={sid or ''}\n")
               f.write(f"has_story={'true' if sid else 'false'}\n")
@@ -59,7 +79,7 @@ jobs:
           DISPATCH_STORY_ID: ${{ inputs.story_id }}
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
-      - name: Skip — no story ID in commit
+      - name: Skip — no story ID found
         if: steps.story.outputs.has_story == 'false'
         run: |
           echo "No Jira story ID found in commit message — skipping assurance pipeline."
@@ -170,7 +190,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v5
-        continue-on-error: true  # artifact absent when no story ID; gate script handles missing file
+        continue-on-error: true  # artifact absent when no story ID in commit; Python script handles missing gate.json
         with:
           name: gate-result
           path: /tmp/
