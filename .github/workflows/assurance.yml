@@ -2,6 +2,16 @@ name: Assurance CI
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      story_id:
+        description: 'Jira story ID (e.g. PROT-105) — overrides commit message detection'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   assurance:
@@ -10,7 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 2   # need parent commit for diff
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v6
         with:
@@ -19,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e ".[dev]" 2>/dev/null || pip install \
-            anthropic pytest pytest-bdd playwright pytest-playwright \
+            anthropic httpx pytest pytest-bdd playwright pytest-playwright \
             streamlit python-dotenv pydantic
 
       - name: Install Playwright browsers
@@ -32,23 +43,33 @@ jobs:
           import sys, os, subprocess
           sys.path.insert(0, ".")
           from src.domain.commit_parser import extract_story_id
+          dispatch_id = os.environ.get("DISPATCH_STORY_ID", "").strip()
           git_msg = subprocess.check_output(["git", "log", "-1", "--format=%s"], text=True).strip()
           pr_title = os.environ.get("PR_TITLE", "")
-          msg = git_msg or pr_title
-          sid = extract_story_id(msg)
-          print(f"story_id={sid or ''}")
+          sid = dispatch_id or extract_story_id(git_msg) or extract_story_id(pr_title)
+          print(f"Story ID: {sid or '(none)'}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"story_id={sid or ''}\n")
               f.write(f"has_story={'true' if sid else 'false'}\n")
           EOF
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          DISPATCH_STORY_ID: ${{ inputs.story_id }}
 
-      - name: Skip — no story ID
+      - name: Skip — no story ID in commit
         if: steps.story.outputs.has_story == 'false'
         run: |
-          echo "No story ID in commit message — skipping assurance pipeline."
+          echo "No Jira story ID found in commit message — skipping assurance pipeline."
           exit 0
+
+      - name: Fetch Jira ticket
+        if: steps.story.outputs.has_story == 'true'
+        run: |
+          python scripts/fetch_jira_ticket.py \
+            --story-id "${{ steps.story.outputs.story_id }}" \
+            --jira-dir jira/
+        env:
+          JIRA_DATA_URL: https://shreynp.github.io/Assurance-CI
 
       - name: Generate and validate tests
         if: steps.story.outputs.has_story == 'true'
@@ -61,18 +82,17 @@ jobs:
             --model claude-sonnet-4-6
         env:
           STORY_ID: ${{ steps.story.outputs.story_id }}
+          BASE_URL: http://localhost:3000
+          TARGET_URL: http://localhost:3000
+          JIRA_DIR: jira
 
       - name: Append traceability record
         if: steps.story.outputs.has_story == 'true'
-        env:
-          STORY_ID: ${{ steps.story.outputs.story_id }}
-          COMMIT_SHA: ${{ github.sha }}
-          COMMIT_AUTHOR: ${{ github.actor }}
         run: |
           python scripts/append_record.py \
-            --story-id "$STORY_ID" \
-            --commit-sha "$COMMIT_SHA" \
-            --author "$COMMIT_AUTHOR" \
+            --story-id "${{ steps.story.outputs.story_id }}" \
+            --commit-sha "${{ github.sha }}" \
+            --author "${{ github.actor }}" \
             --generated-dir generated/ \
             --report-dir traceability/reports/ \
             --register traceability/register.json
@@ -87,18 +107,51 @@ jobs:
           git config user.name "Assurance CI"
           git config user.email "ci@assurance"
           git add traceability/ generated/
-          git diff --cached --quiet || git commit -m "chore(assurance): record run for ${{ steps.story.outputs.story_id }} @ ${{ github.sha }}"
+          git diff --cached --quiet || git commit -m "chore(assurance): record run for ${{ steps.story.outputs.story_id }} @ ${{ github.sha }} [skip ci]"
           git push
 
       - name: Write gate outcome
         if: steps.story.outputs.has_story == 'true'
+        continue-on-error: true
         run: |
           python scripts/resolve_gate.py \
             --register traceability/register.json \
-            --story-id ${{ steps.story.outputs.story_id }} \
-            --commit-sha ${{ github.sha }} \
+            --story-id "${{ steps.story.outputs.story_id }}" \
+            --commit-sha "${{ github.sha }}" \
             --output /tmp/gate.json
           cat /tmp/gate.json
+
+      - name: Build PR body
+        if: steps.story.outputs.has_story == 'true'
+        run: |
+          python scripts/build_pr_body.py \
+            --story-id "${{ steps.story.outputs.story_id }}" \
+            --gate /tmp/gate.json \
+            --report-dir traceability/reports/ \
+            --out /tmp/pr_body.md
+        env:
+          JIRA_DATA_URL: https://shreynp.github.io/Assurance-CI
+
+      - name: Create or update PR
+        if: steps.story.outputs.has_story == 'true'
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          STORY_ID="${{ steps.story.outputs.story_id }}"
+          TITLE=$(git log -1 --format='%s' | sed 's/\[skip ci\]//g' | xargs)
+          EXISTING=$(gh pr list --head "$BRANCH" --base main --json number -q '.[0].number' 2>/dev/null || true)
+          if [ -n "$EXISTING" ]; then
+            gh pr comment "$EXISTING" --body-file /tmp/pr_body.md
+            echo "Assurance report added to PR #$EXISTING"
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "[$STORY_ID] $TITLE" \
+              --body-file /tmp/pr_body.md
+            echo "PR created"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload gate result
         if: steps.story.outputs.has_story == 'true'
@@ -112,16 +165,15 @@ jobs:
     needs: assurance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-
       - uses: actions/download-artifact@v5
+        continue-on-error: true  # artifact absent when no story ID; gate script handles missing file
         with:
           name: gate-result
           path: /tmp/
 
       - name: Evaluate gate
         run: |
-          python - <<'EOF'
+          python3 - <<'EOF'
           import json, sys
           try:
               gate = json.load(open("/tmp/gate.json"))
@@ -129,6 +181,6 @@ jobs:
               print("No gate result — no story ID was present, gate passes.")
               sys.exit(0)
           status = gate.get("status", "red")
-          print(f"Gate: {status.upper()} — {gate.get('reason','')}")
+          print(f"Gate: {status.upper()} — {gate.get('reason', '')}")
           sys.exit(0 if status == "green" else 1)
           EOF

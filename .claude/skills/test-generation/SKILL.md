@@ -19,8 +19,10 @@ generate a feature file + test script, run them, and self-heal on failure.
 ### 1 — Read the story
 
 ```bash
-cat jira/$STORY_ID.md
+cat ${JIRA_DIR:-jira}/$STORY_ID.md
 ```
+
+`JIRA_DIR` is set by the CI workflow (e.g. `jira` or `assurance-ci/jira`); defaults to `jira` locally.
 
 Extract: `title`, `description`, `acceptance_criteria`, `test_type`
 (`test_type` is `pytest-bdd` or `playwright` — defaults to `pytest-bdd` if absent).
@@ -81,6 +83,13 @@ Rules passed to the agent:
 - When DOMAIN.md is present, entity assertions must use field names from DOMAIN.md
   (e.g. `story_id`, `commit_sha`, `gate_result`, not ad-hoc names)
 
+**Generated test conventions (enforced from PROT-105 learnings):**
+- `scenarios()` must reference `"{STORY_ID}.feature"` by name — never a generic filename
+- HTTP tests: always use `httpx` (not `requests`); always read `BASE_URL = os.environ.get("BASE_URL", "http://localhost:3000")`
+- Auth tokens and test credentials must come from env vars with safe defaults:
+  `VALID_BEARER_TOKEN = os.environ.get("TEST_BEARER_TOKEN", "valid-test-token")`
+- Never hardcode URLs or tokens — CI injects real values; local runs fall back to defaults
+
 ### 5 — Run generated tests
 
 ```bash
@@ -108,8 +117,11 @@ Downstream workflow steps (`append_record.py`, `render_register.py`, git push,
 ## Environment
 
 - `STORY_ID` — set by the CI workflow or by the user when running locally
+- `JIRA_DIR` — directory containing story markdown files (default: `jira`)
+- `BASE_URL` — live server URL for HTTP tests (default: `http://localhost:3000`)
+- `TARGET_URL` — alias for `BASE_URL` used by some test patterns
+- `TEST_BEARER_TOKEN` — auth token injected by CI for authenticated endpoint tests
 - `ANTHROPIC_API_KEY` — required for the test-writer agent
-- Story files live in `jira/$STORY_ID.md`
 - Output writes to `generated/$STORY_ID/`
 
 ## Local usage
