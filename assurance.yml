@@ -116,6 +116,36 @@ jobs:
           cp -r assurance-ci/.claude/. ./.claude/
           ln -s "${{ github.workspace }}/assurance-ci/scripts" scripts
 
+      - name: Add Playwright MCP to Claude config
+        if: steps.story.outputs.has_story == 'true'
+        run: |
+          python3 - << 'EOF'
+          import json, pathlib
+          cfg = pathlib.Path(".claude/mcp.json")
+          data = json.loads(cfg.read_text()) if cfg.exists() else {"mcpServers": {}}
+          data.setdefault("mcpServers", {})["playwright"] = {
+            "command": "npx",
+            "args": ["-y", "@playwright/mcp@latest", "--headless"],
+            "description": "Playwright browser automation for E2E test generation"
+          }
+          cfg.write_text(json.dumps(data, indent=2))
+          EOF
+
+      - name: Override Claude permissions for CI
+        if: steps.story.outputs.has_story == 'true'
+        run: |
+          # assurance-ci/settings.json has a narrow allow list for local dev.
+          # CI needs full Bash access so test-generation can read env vars,
+          # run the context builder, write test files, and call pytest.
+          cat > .claude/settings.json << 'EOF'
+          {
+            "permissions": {
+              "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)", "Grep(*)"],
+              "deny": []
+            }
+          }
+          EOF
+
       - name: Start Next.js dev server
         if: steps.story.outputs.has_story == 'true'
         run: nohup npm run dev > /tmp/dev.log 2>&1 &
@@ -128,16 +158,16 @@ jobs:
 
       - name: Generate and validate tests
         if: steps.story.outputs.has_story == 'true'
+        continue-on-error: true  # Category B exits clean; unexpected max-turns must not kill the pipeline
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: "/test-generation"
           show_full_output: "true"
           claude_args: |
-            --max-turns 10
+            --max-turns 25
             --model claude-sonnet-4-6
             --verbose
-            --dangerouslySkipPermissions
         env:
           STORY_ID: ${{ steps.story.outputs.story_id }}
           BASE_URL: http://localhost:3000

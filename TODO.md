@@ -5,3 +5,4 @@ look for alternative harness for test generation
 Domain.md for the the CI agent
 flaging if no coverage
 Enhance JIRA tickets to be more concise
+scripts to script-assurance-ci
