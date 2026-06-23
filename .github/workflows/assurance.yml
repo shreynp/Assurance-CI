@@ -1,8 +1,6 @@
 name: Assurance CI
 
 on:
-  push:
-    branches: ["**"]
   pull_request:
 
 jobs:
@@ -31,10 +29,12 @@ jobs:
         id: story
         run: |
           python - <<'EOF'
-          import sys, os
+          import sys, os, subprocess
           sys.path.insert(0, ".")
           from src.domain.commit_parser import extract_story_id
-          msg = os.environ.get("COMMIT_MSG", "")
+          git_msg = subprocess.check_output(["git", "log", "-1", "--format=%s"], text=True).strip()
+          pr_title = os.environ.get("PR_TITLE", "")
+          msg = git_msg or pr_title
           sid = extract_story_id(msg)
           print(f"story_id={sid or ''}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
@@ -42,7 +42,7 @@ jobs:
               f.write(f"has_story={'true' if sid else 'false'}\n")
           EOF
         env:
-          COMMIT_MSG: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
 
       - name: Skip — no story ID
         if: steps.story.outputs.has_story == 'false'
