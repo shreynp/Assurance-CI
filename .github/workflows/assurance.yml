@@ -47,7 +47,8 @@ jobs:
           dispatch_id = os.environ.get("DISPATCH_STORY_ID", "").strip()
           git_msg = subprocess.check_output(["git", "log", "-1", "--format=%s"], text=True).strip()
           pr_title = os.environ.get("PR_TITLE", "")
-          sid = dispatch_id or extract_story_id(git_msg) or extract_story_id(pr_title)
+          branch = os.environ.get("BRANCH_NAME", "")
+          sid = dispatch_id or extract_story_id(git_msg) or extract_story_id(pr_title) or extract_story_id(branch)
           print(f"Story ID: {sid or '(none)'}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"story_id={sid or ''}\n")
@@ -56,6 +57,7 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           DISPATCH_STORY_ID: ${{ inputs.story_id }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
       - name: Skip — no story ID in commit
         if: steps.story.outputs.has_story == 'false'
