@@ -2,6 +2,19 @@
 
 Story → Commit → Generated Tests → Execution → Gate traceability pipeline for PROTECT AI.
 
+## Triggering the workflow
+
+**On push** — any commit to a PR branch fires the pipeline automatically via `pull_request: synchronize`. No special commit message needed; the story ID is detected from (in order): workflow dispatch input → commit message → PR title → branch name (e.g. `feat/PROT-105-...`).
+
+**Manual dispatch via CLI:**
+```bash
+gh workflow run assurance.yml \
+  --ref <branch> \
+  --field story_id=PROT-105
+```
+
+**Manual dispatch via GitHub UI:** Actions → Assurance CI → Run workflow → select branch → enter story ID.
+
 ## How it works
 
 1. A commit message containing a story ID (e.g. `PROT-101: add endpoint`) triggers the pipeline.
