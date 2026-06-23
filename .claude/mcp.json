@@ -5,11 +5,6 @@
       "args": ["-y", "@upstash/context7-mcp"],
       "description": "Version-specific library docs — eliminates wrong-version hallucination"
     },
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--headless"],
-      "description": "E2E browser automation for UI verification"
-    },
     "fetch": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-fetch"],
