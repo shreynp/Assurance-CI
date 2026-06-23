@@ -25,17 +25,6 @@
           }
         ]
       }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo 'REMINDER: src/domain/ must stay pure (no I/O). All I/O in scripts/. Seed data → traceability/register.json only.'"
-          }
-        ]
-      }
     ]
   }
 }

@@ -9,6 +9,11 @@
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-fetch"],
       "description": "Lightweight web content fetch — convert pages to Markdown for research"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "description": "Browser automation — navigate, click, screenshot, and interact with web UIs"
     }
   }
 }
