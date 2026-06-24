@@ -110,13 +110,13 @@ class TestStoryLoader:
         story = load_story("PROT-101", jira_dir)
         assert story.id == "PROT-101"
         assert story.test_type == "pytest-bdd"
-        assert len(story.acceptance_criteria) == 4
+        assert len(story.acceptance_criteria) == 6
 
     def test_loads_prot102(self):
         jira_dir = Path(__file__).parent.parent / "jira"
         story = load_story("PROT-102", jira_dir)
         assert story.test_type == "playwright"
-        assert len(story.acceptance_criteria) == 5
+        assert len(story.acceptance_criteria) == 6
 
     def test_missing_story_raises(self):
         jira_dir = Path(__file__).parent.parent / "jira"

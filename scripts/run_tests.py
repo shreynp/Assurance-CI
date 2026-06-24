@@ -1,6 +1,21 @@
 """
-Run the generated test script (pytest-bdd or Playwright) and write an execution report.
-Called by the assurance CI workflow.
+Run generated tests via pytest and write an execution report JSON.
+
+Inputs:
+  ARG  --story-id       Story identifier, e.g. PROT-101
+  ARG  --generated-dir  Root of generated output (must contain <story-id>/meta.json)
+  ARG  --report-out     Directory to write <story-id>_report.json
+  ENV  GITHUB_SHA       (default: "local")   — recorded in the report
+  ENV  GITHUB_ACTOR     (default: $USER or "unknown") — recorded as author
+  ENV  RUNNER_OS        (default: "local")   — recorded as environment string
+
+Outputs:
+  FILE <report-out>/<story-id>_report.json — schema:
+       {story_id, commit_sha, author, passed, failed, environment,
+        timestamp, output (truncated to 4 000 chars), exit_code}
+  exit — pytest's return code (0=all passed, 1=failures/errors)
+
+Full pytest output is printed to stdout before the report is written.
 """
 import argparse
 import json

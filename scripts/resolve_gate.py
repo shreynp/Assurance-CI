@@ -1,4 +1,19 @@
-"""Read register, find the latest run for story+commit, output gate.json."""
+"""Read the traceability register and resolve the deploy gate for a story+commit.
+
+Inputs:
+  ARG  --register    Path to traceability/register.json
+  ARG  --story-id    Story identifier, e.g. PROT-101
+  ARG  --commit-sha  Full commit SHA to look up
+  ARG  --output      Path to write gate.json
+
+Outputs:
+  FILE gate.json — schema: {"status": "green"|"red", "reason": "<string>"}
+  exit 0 — gate is green (all tests passed)
+  exit 1 — gate is red (failures found, no matching record, or register missing)
+
+When multiple records share the same story_id + commit_sha, the last (most
+recently appended) record wins — a re-run that passes overwrites a prior failure.
+"""
 import argparse
 import json
 import sys

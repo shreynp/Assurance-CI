@@ -1,11 +1,34 @@
 """Incremental context builder for AI test generation.
 
-Produces context.json describing what changed in a commit: changed files,
-changed symbols (AST-level), symbol signatures, callers, diff excerpts,
-full file contents (small files), inbound imports, file directives, and
-existing test files.
+Produces a structured JSON snapshot of what changed in a commit so the
+test-generation skill can write precise, grounded tests rather than guessing
+from a raw diff string.
 
-CLI: python scripts/build_context.py --base HEAD~1 --head HEAD --output context.json [--story-id PROT-NNN]
+Inputs:
+  ARG  --base        Git ref for the base commit, e.g. HEAD~1 or a SHA
+  ARG  --head        Git ref for the head commit, e.g. HEAD
+  ARG  --output      Path to write context.json (default: /tmp/context.json)
+  ARG  --story-id    (optional) Story identifier — used to include previously
+                     generated test files in "existing_tests"
+
+Outputs:
+  FILE context.json — schema:
+    {
+      "changed_files":      [str],
+      "changed_symbols":    {path: [symbol_name]},
+      "symbol_signatures":  {path: {symbol_name: signature_text}},
+      "callers":            {path: [imported_symbol]},
+      "context_type":       "ui" | "backend" | "both",
+      "diff_excerpts":      {path: str},
+      "file_contents":      {path: str},        # files ≤200 lines only
+      "file_imports":       {path: [module]},
+      "file_directives":    {path: ["use client"|"use server"]},
+      "existing_tests":     {path: str}
+    }
+
+CLI:
+  python scripts/build_context.py --base HEAD~1 --head HEAD \\
+    --output /tmp/context.json --story-id PROT-101
 """
 from __future__ import annotations
 
@@ -186,7 +209,8 @@ def find_py_callers(changed_paths: list[str]) -> dict[str, list[str]]:
     return callers
 
 
-# Backward-compatible alias used by tests and external callers
+# Backward-compat alias — tests/test_build_context.py imports this name directly.
+# Do not remove without updating those imports.
 find_callers = find_py_callers
 
 
@@ -544,10 +568,18 @@ def _find_existing_tests(changed_paths: list[str], story_id: str | None = None) 
 
 
 # ---------------------------------------------------------------------------
-# Context type classifier + top-level build
+# File-type classifier: maps changed paths to "ui" / "backend" / "both"
 # ---------------------------------------------------------------------------
 
 def context_type(changed_paths: list[str]) -> str:
+    """Classify changed paths as 'ui', 'backend', or 'both'.
+
+    Path-substring rules (checked on each element of changed_paths):
+      ui keywords:      'dashboard', 'components', 'app'
+      backend keywords: 'domain', 'scripts', 'api', 'lib'
+    Returns 'both' when both groups match, 'ui' when only UI matches,
+    'backend' otherwise (including empty list).
+    """
     has_ui = any("dashboard" in p or "components" in p or "app" in p for p in changed_paths)
     has_backend = any("domain" in p or "scripts" in p or "api" in p or "lib" in p for p in changed_paths)
     if has_ui and has_backend:
@@ -556,6 +588,10 @@ def context_type(changed_paths: list[str]) -> str:
         return "ui"
     return "backend"
 
+
+# ---------------------------------------------------------------------------
+# Top-level orchestration
+# ---------------------------------------------------------------------------
 
 def build(base: str, head: str, story_id: str | None = None) -> dict:
     files = changed_files(base, head)

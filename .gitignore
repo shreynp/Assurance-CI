@@ -15,4 +15,3 @@ dist/
 *.jpg
 *.jpeg
 .agent-audit/*.jsonl
-agentic-guide-v7-enterprise.md

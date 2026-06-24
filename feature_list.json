@@ -1,48 +1,65 @@
 {
-  "project": "assurance-ci",
-  "last_updated": "2026-06-22",
   "features": [
     {
       "id": "F1",
       "name": "AI test generation",
       "status": "done",
-      "files": ["scripts/generate_tests.py", "src/domain/generator.py"],
-      "tests": 25,
-      "notes": "Claude generates Gherkin + pytest-bdd from story diff"
+      "description": "Claude generates pytest-bdd tests from Jira story AC via /test-generation skill + build_context.py",
+      "tests": 18,
+      "files": ["scripts/build_context.py", "src/domain/generator.py", ".claude/skills/test-generation/SKILL.md"]
     },
     {
       "id": "F2",
       "name": "Test execution",
       "status": "done",
-      "files": ["scripts/run_tests.py"],
-      "tests": 5,
-      "notes": "Runs generated tests, captures output to report JSON"
+      "description": "Generated tests run via pytest; results parsed into structured report JSON",
+      "tests": 13,
+      "files": ["scripts/run_tests.py"]
     },
     {
       "id": "F3",
       "name": "Traceability register",
       "status": "done",
-      "files": ["scripts/append_record.py", "scripts/render_register.py", "src/domain/register.py", "traceability/register.json", "src/dashboard/app.py"],
-      "tests": 6,
-      "notes": "register.json → REGISTER.md → Streamlit dashboard"
+      "description": "Append traceability records to register.json; render REGISTER.md after each run",
+      "tests": 13,
+      "files": ["traceability/register.json", "scripts/append_record.py", "scripts/render_register.py"]
     },
     {
       "id": "F4",
-      "name": "Story-keyed CI trigger",
+      "name": "Story-keyed trigger",
       "status": "done",
-      "files": [".github/workflows/assurance.yml", "src/domain/commit_parser.py"],
-      "tests": 7,
-      "notes": "Commit message with PROT-NNN triggers assurance job"
+      "description": "Extract Jira story ID from commit message / PR title / branch name; skip if absent",
+      "tests": 21,
+      "files": ["src/domain/commit_parser.py", ".github/workflows/assurance.yml"]
     },
     {
       "id": "F5",
       "name": "Deploy gate",
       "status": "done",
-      "files": ["scripts/resolve_gate.py"],
-      "tests": 8,
-      "notes": "Exits 0 (green/allow) or 1 (red/block) based on register row"
+      "description": "resolve_gate.py reads register.json and exits 0 (green) or 1 (red) to block/allow merge",
+      "tests": 23,
+      "files": ["scripts/resolve_gate.py"]
+    },
+    {
+      "id": "F6",
+      "name": "Agentic CI loop",
+      "status": "done",
+      "description": "anthropics/claude-code-action@v1 runs /test-generation in CI with full TS/TSX/JS/JSX context",
+      "tests": 18,
+      "files": [".github/workflows/assurance.yml", "scripts/build_context.py"]
+    },
+    {
+      "id": "F7",
+      "name": "RCA in PR report",
+      "status": "done",
+      "description": "build_pr_body.py adds static RCA table + Haiku-generated plain-English root cause when tests fail",
+      "tests": 0,
+      "files": ["scripts/build_pr_body.py"]
     }
   ],
-  "total_tests": 66,
-  "test_status": "all_green"
+  "summary": {
+    "total_tests": 103,
+    "last_verified": "2026-06-24",
+    "next": null
+  }
 }

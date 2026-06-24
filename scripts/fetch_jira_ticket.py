@@ -1,11 +1,19 @@
 """
-Fetch a ticket markdown file from a remote data source and write it to jira/<STORY_ID>.md.
-The remote source must serve the file in the format expected by story_loader.py
-(## Acceptance Criteria with - AC1: … bullets).
+Fetch a Jira story markdown file from a remote URL and write it to jira/<STORY_ID>.md.
 
-Required env var:
-  JIRA_DATA_URL  Base URL without trailing slash.
-                 e.g. https://raw.githubusercontent.com/org/Assurance-CI/main/jira
+Inputs:
+  ENV  JIRA_DATA_URL  (default: "https://shreynp.github.io/Assurance-CI")
+                      Base URL without trailing slash. File is fetched as
+                      <JIRA_DATA_URL>/<story-id>.md
+  ARG  --story-id     Story identifier, e.g. PROT-101
+  ARG  --jira-dir     Local directory to write the file into (default: jira)
+
+Outputs:
+  FILE jira/<story-id>.md — story markdown in the format expected by
+                            src/domain/story_parser.py (## Acceptance Criteria
+                            with "- AC1: …" bullets)
+  exit 0 — file written successfully
+  exit 1 — HTTP 404 or network error
 
 Usage:
   python scripts/fetch_jira_ticket.py --story-id PROT-101 --jira-dir jira/
@@ -32,7 +40,7 @@ def main():
     parser.add_argument("--jira-dir", default="jira")
     args = parser.parse_args()
 
-    base_url = os.environ["JIRA_DATA_URL"].rstrip("/")
+    base_url = os.getenv("JIRA_DATA_URL", "https://shreynp.github.io/Assurance-CI").rstrip("/")
     url = f"{base_url}/{args.story_id}.md"
 
     print(f"Fetching {args.story_id} from {url}")

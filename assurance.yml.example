@@ -1,16 +1,15 @@
 # Assurance CI — Story → Commit → Test → Gate pipeline
 #
-# Pipeline stages:
-#   1. Extract story ID from commit message (PROT-NNN pattern)
-#   2. Fetch Jira story markdown from GitHub Pages (JIRA_DATA_URL)
-#   3. Start Next.js dev server
-#   4. Generate + validate tests via claude-code-action@v1 (/test-generation skill)
-#   5. Append traceability record to traceability/register.json
-#   6. Resolve gate: green (all pass) or red (any fail) → gate job enforces exit-1
-#   7. Build PR body and create/update PR with assurance report
+# Data flow:
+#   Extract story ID (PROT-NNN)
+#     → jira/<id>.md        (fetch_jira_ticket.py)
+#     → generated/<id>/     (claude-code-action@v1 + /test-generation skill)
+#     → traceability/reports/<id>_report.json  (inline pytest step)
+#     → traceability/register.json  (append_record.py)
+#     → /tmp/gate.json      (resolve_gate.py)
+#     → gate job exit code  (0=green, 1=red — blocks merge)
 #
 # Required secrets: ANTHROPIC_API_KEY, GITHUB_TOKEN (auto-provided)
-# Gate exit-code contract: gate job exits 0 (green) or 1 (red, blocks merge)
 name: Assurance CI
 
 on:
@@ -60,7 +59,7 @@ jobs:
         run: |
           pip install -e "assurance-ci/[dev]" 2>/dev/null || pip install \
             anthropic httpx pytest pytest-bdd playwright pytest-playwright \
-            python-dotenv pydantic
+            python-dotenv pydantic tree-sitter tree-sitter-typescript
 
       - name: Install Playwright browsers
         run: playwright install chromium --with-deps
@@ -82,6 +81,7 @@ jobs:
               ("pr_title", extract_story_id(pr_title)),
               ("branch",   extract_story_id(branch)),
           ]
+          # Priority: dispatch input > commit message > PR title > branch name
           sid, source = next(((v, k) for k, v in sources if v), (None, None))
           print(f"Story ID: {sid or '(none)'} (source: {source or 'none'})")
           print(f"  dispatch={dispatch_id!r}  commit={git_msg!r}")
@@ -176,7 +176,7 @@ jobs:
 
       - name: Run generated tests
         if: steps.story.outputs.has_story == 'true'
-        continue-on-error: true
+        continue-on-error: true  # test failures are recorded in the report; gate job enforces pass/fail — not this step
         run: |
           python - <<'EOF'
           import subprocess, json, os, platform, re
@@ -235,12 +235,13 @@ jobs:
           git config user.email "ci@assurance"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git add traceability/ generated/
+          # [skip ci] prevents this commit from re-triggering the assurance workflow on the same branch
           git diff --cached --quiet || git commit -m "chore(assurance): record run for ${{ steps.story.outputs.story_id }} @ ${{ github.sha }} [skip ci]"
           git push
 
       - name: Write gate outcome
         if: steps.story.outputs.has_story == 'true'
-        continue-on-error: true
+        continue-on-error: true  # resolve_gate.py must run even on test failure to write gate.json for the gate job
         run: |
           python assurance-ci/scripts/resolve_gate.py \
             --register traceability/register.json \
@@ -251,6 +252,8 @@ jobs:
 
       - name: Build PR body
         if: steps.story.outputs.has_story == 'true'
+        # Calls Claude Haiku (via ANTHROPIC_API_KEY) to generate a plain-English RCA summary when tests fail.
+        # Falls back gracefully — PR body is always written even if the Claude call fails.
         run: |
           python assurance-ci/scripts/build_pr_body.py \
             --story-id "${{ steps.story.outputs.story_id }}" \
@@ -259,6 +262,7 @@ jobs:
             --out /tmp/pr_body.md
         env:
           JIRA_DATA_URL: https://shreynp.github.io/Assurance-CI
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Create or update PR
         if: steps.story.outputs.has_story == 'true'

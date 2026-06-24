@@ -212,8 +212,7 @@ Variables injected by `assurance.yml` into the agentic step and downstream scrip
 | `render_register.py` | Workflow step | Renders `register.json` → `REGISTER.md` markdown table |
 | `resolve_gate.py` | Workflow step | Reads `register.json` and writes pass/fail decision to `/tmp/gate.json` |
 | `build_pr_body.py` | Workflow step | Renders gate status, test results, RCA table, and AI-generated RCA summary into `/tmp/pr_body.md` for PR creation |
-| `generate_tests.py` | Local / legacy | Direct SDK test generation (pre-agentic; kept for local dev fallback) |
-| `run_tests.py` | Local / legacy | Runs generated tests and prints results |
+| `run_tests.py` | Workflow step (skill step 5) | Runs `pytest` against `generated/$STORY_ID/`, captures output and writes JSON report |
 
 ---
 
@@ -338,12 +337,6 @@ Python caller detection uses `_SEARCH_ROOTS = ("src", "scripts")`.
 
 ---
 
-## Prompt Builders — `src/domain/generator.py`
-
-`build_feature_prompt(story, diff, context)` and `build_test_script_prompt(story, feature_text, feature_filename, context)` accept the structured context dict and append targeted sections (`## Changed Symbols`, `## Call Sites`, `## Test Surface`) so prompts are precise rather than a wall of diff text. The `context=None` path remains for backward compatibility and local use.
-
----
-
 ## Cost Profile
 
 | Approach | Model | Calls | Estimated cost/run |
@@ -357,7 +350,7 @@ The agentic step runs with `max-turns: 25` and `continue-on-error: true`. If Cla
 
 ## Jira File Format Contract
 
-`jira/PROT-NNN.md` files are the source of truth for acceptance criteria. `src/domain/story_loader.py` extracts AC text using this pattern:
+`jira/PROT-NNN.md` files are the source of truth for acceptance criteria. `src/domain/story_parser.py` extracts AC text using this pattern:
 
 ```
 _AC_PATTERN = re.compile(r"^-\s+AC\d+:\s+(.+)$", re.MULTILINE)
@@ -372,7 +365,7 @@ _AC_PATTERN = re.compile(r"^-\s+AC\d+:\s+(.+)$", re.MULTILINE)
 - AC2: Another criterion
 ```
 
-Prose-style bold headings (`**AC1 — Title**`) are for human readability and may coexist, but the parser ignores them. If no `- ACN:` bullets are present, `story_loader.py` raises `ValueError: No acceptance criteria found` and the CI run fails at the generate step.
+Prose-style bold headings (`**AC1 — Title**`) are for human readability and may coexist, but the parser ignores them. If no `- ACN:` bullets are present, `story_parser.py` raises `ValueError: No acceptance criteria found` and the CI run fails at the generate step.
 
 When served via GitHub Pages, the URL is `https://shreynp.github.io/Assurance-CI/PROT-NNN.md` — fetched by `scripts/fetch_jira_ticket.py` using `JIRA_DATA_URL` env var.
 

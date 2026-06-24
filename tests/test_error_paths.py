@@ -1,15 +1,13 @@
 """
-Error-path and coverage-gap tests identified by the triple-agent audit.
-Covers: story_loader fallbacks, register malformed JSON, resolve_gate edge
-cases, run_tests parse_counts gaps, append_record missing files, and
-generate_tests diff truncation.
+Error-path and coverage-gap tests for: story_loader fallbacks, register
+malformed JSON, resolve_gate edge cases, run_tests parse_counts gaps,
+append_record missing files, and run_tests/build_pr_body coverage.
 """
 import importlib.util
 import json
 import os
 import subprocess
 import sys
-import tempfile
 import unittest.mock
 from pathlib import Path
 
@@ -18,7 +16,7 @@ import pytest
 from src.domain.commit_parser import extract_story_id
 from src.domain.models import ExecutionReport, GateResult
 from src.domain.register import append_record
-from src.domain.story_loader import parse_story_text
+from src.domain.story_parser import parse_story_text
 from src.io.story_loader import load_story
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -366,54 +364,6 @@ class TestAppendRecordScriptErrorPaths:
         assert result.returncode != 0
 
 
-# ─── generate_tests.py diff truncation ───────────────────────────────────────
-
-anthropic_pkg = pytest.importorskip("anthropic", reason="anthropic package not installed")
-
-
-class TestGenerateTestsDiffTruncation:
-    def test_diff_truncated_to_8000_chars(self, tmp_path):
-        big_diff = "x" * 20_000
-        diff_file = tmp_path / "big.diff"
-        diff_file.write_text(big_diff)
-        out_dir = tmp_path / "out"
-        out_dir.mkdir()
-
-        captured_prompt = {}
-
-        def fake_create(**kwargs):
-            msg = kwargs["messages"][0]["content"]
-            captured_prompt["content"] = msg
-            text_block = unittest.mock.MagicMock()
-            text_block.type = "text"
-            text_block.text = "Feature: Test\n  Scenario: AC1\n    Given step\n    When step\n    Then step"
-            resp = unittest.mock.MagicMock()
-            resp.content = [text_block]
-            return resp
-
-        with unittest.mock.patch("anthropic.Anthropic") as mock_anthropic_cls:
-            mock_client = unittest.mock.MagicMock()
-            mock_client.messages.create.side_effect = fake_create
-            mock_anthropic_cls.return_value = mock_client
-
-            spec = importlib.util.spec_from_file_location(
-                "generate_tests_mod", PROJECT_ROOT / "scripts" / "generate_tests.py"
-            )
-            mod = importlib.util.module_from_spec(spec)
-            with unittest.mock.patch(
-                "sys.argv",
-                ["generate_tests.py",
-                 "--story-id", "PROT-101",
-                 "--diff", str(diff_file),
-                 "--out", str(out_dir)],
-            ):
-                spec.loader.exec_module(mod)
-                mod.main()
-
-        assert "content" in captured_prompt
-        assert captured_prompt["content"].count("x") <= 8000
-
-
 # ─── run_tests.py output truncation ──────────────────────────────────────────
 
 class TestRunTestsOutputTruncation:
@@ -516,68 +466,3 @@ class TestBuildPrBody:
         assert result.returncode == 0
         body = out_file.read_text()
         assert "https://example.com/jira/PROT-101.md" in body
-
-
-# ─── generate_tests.py null Claude response ───────────────────────────────────
-
-class TestGenerateTestsNullClaudeResponse:
-    def _make_text_resp(self, text):
-        block = unittest.mock.MagicMock()
-        block.type = "text"
-        block.text = text
-        resp = unittest.mock.MagicMock()
-        resp.content = [block]
-        return resp
-
-    def _make_no_text_resp(self):
-        block = unittest.mock.MagicMock()
-        block.type = "tool_use"
-        resp = unittest.mock.MagicMock()
-        resp.content = [block]
-        return resp
-
-    def _run_main_with_side_effects(self, tmp_path, side_effects):
-        diff_file = tmp_path / "diff.txt"
-        diff_file.write_text("some diff")
-        out_dir = tmp_path / "out"
-        out_dir.mkdir(exist_ok=True)
-
-        responses = list(side_effects)
-        call_idx = [0]
-
-        def fake_create(**kwargs):
-            resp = responses[call_idx[0]]
-            call_idx[0] += 1
-            return resp
-
-        with unittest.mock.patch("anthropic.Anthropic") as mock_cls:
-            mock_client = unittest.mock.MagicMock()
-            mock_client.messages.create.side_effect = fake_create
-            mock_cls.return_value = mock_client
-
-            spec = importlib.util.spec_from_file_location(
-                f"gen_tests_null_{id(tmp_path)}",
-                PROJECT_ROOT / "scripts" / "generate_tests.py",
-            )
-            mod = importlib.util.module_from_spec(spec)
-            with unittest.mock.patch(
-                "sys.argv",
-                ["generate_tests.py", "--story-id", "PROT-101",
-                 "--diff", str(diff_file), "--out", str(out_dir)],
-            ):
-                spec.loader.exec_module(mod)
-                with pytest.raises(SystemExit) as exc:
-                    mod.main()
-                return exc.value.code
-
-    def test_null_feature_response_exits_1(self, tmp_path):
-        code = self._run_main_with_side_effects(tmp_path, [self._make_no_text_resp()])
-        assert code == 1
-
-    def test_null_test_script_response_exits_1(self, tmp_path):
-        feature_text = "Feature: Test\n  Scenario: AC1\n    Given step\n    When step\n    Then step"
-        code = self._run_main_with_side_effects(
-            tmp_path,
-            [self._make_text_resp(feature_text), self._make_no_text_resp()],
-        )
-        assert code == 1

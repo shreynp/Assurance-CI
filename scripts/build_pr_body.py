@@ -1,15 +1,28 @@
 """
 Build a PR body markdown file from gate.json and the execution report.
 
-Usage:
-  python scripts/build_pr_body.py \
-    --story-id PROT-101 \
-    --gate /tmp/gate.json \
-    --report-dir traceability/reports/ \
-    --out /tmp/pr_body.md
+Inputs:
+  ARG  --story-id   Story identifier, e.g. PROT-101
+  ARG  --gate       Path to gate.json (written by resolve_gate.py)
+  ARG  --report-dir Directory containing <story-id>_report.json (optional — defaults to 0/0 counts)
+  ARG  --out        Path to write the output markdown
+  ENV  JIRA_DATA_URL        (optional) Base URL used to render a clickable ticket link
+  ENV  ANTHROPIC_API_KEY    (optional) If present, calls Claude Haiku to generate a 2–3 sentence
+                            plain-English RCA summary appended after the failure table.
+                            Falls back silently (no summary) if absent or if the call fails.
 
-Optional env var:
-  JIRA_DATA_URL  Used to build a clickable link to the ticket source.
+Outputs:
+  FILE <out>  Markdown PR body: gate badge, test result counts, RCA table (on failure),
+              AI-generated RCA paragraph (on failure, requires ANTHROPIC_API_KEY),
+              and a collapsible pytest output block.
+  exit 0 — always (output is written regardless of gate status)
+
+Usage:
+  python scripts/build_pr_body.py \\
+    --story-id PROT-101 \\
+    --gate /tmp/gate.json \\
+    --report-dir traceability/reports/ \\
+    --out /tmp/pr_body.md
 """
 import argparse
 import json
@@ -29,7 +42,8 @@ def parse_failures(output: str) -> list[dict]:
     failures = []
 
     # 1. Parse "short test summary info" section for the one-liner per failure.
-    for m in re.finditer(r"^FAILED (.+?) - (.+)$", output, re.MULTILINE):
+    # Greedy first group so parameterized IDs like test_fn[a - b] aren't truncated.
+    for m in re.finditer(r"^FAILED (.+) - (.+?)$", output, re.MULTILINE):
         test_path = m.group(1).strip()
         reason = m.group(2).strip()
         # Drop generated/STORY_ID/ prefix so the table stays readable.
@@ -48,11 +62,14 @@ def parse_failures(output: str) -> list[dict]:
         end = headers[i + 1].start() if i + 1 < len(headers) else len(output)
         blocks.append((h.group(1).strip(), output[h.end():end]))
 
-    # Match blocks back to failures by test name (last component).
+    # Match blocks back to failures by full test path, falling back to function name.
+    # Using only the function name can match the wrong block when multiple test files
+    # define a function with the same name (common in generated suites).
     for failure in failures:
-        test_fn = failure["test"].split("::")[-1]
+        test_id = failure["test"]            # e.g. test_PROT-114.py::test_ac1_...
+        test_fn = test_id.split("::")[-1]    # fallback: just the function name
         for block_name, block_body in blocks:
-            if test_fn in block_name:
+            if test_id in block_name or test_fn == block_name.strip():
                 error_lines = [
                     line[1:].strip()  # strip leading "E"
                     for line in block_body.splitlines()
@@ -98,7 +115,9 @@ def generate_worded_rca(failures: list[dict]) -> str:
             ],
         )
         return msg.content[0].text.strip()
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f"[build_pr_body] RCA summary skipped: {e}", file=sys.stderr)
         return ""
 
 

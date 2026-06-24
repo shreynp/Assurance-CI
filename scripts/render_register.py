@@ -1,4 +1,13 @@
-"""Render traceability/register.json → traceability/REGISTER.md."""
+"""Render the traceability register JSON as a human-readable Markdown table.
+
+Inputs:
+  ARG  --register  Path to traceability/register.json
+
+Outputs:
+  FILE <register-dir>/REGISTER.md — Markdown table with columns:
+       Story | Commit | Author | Result | Date
+  exit 0 — always
+"""
 import argparse
 import sys
 from pathlib import Path

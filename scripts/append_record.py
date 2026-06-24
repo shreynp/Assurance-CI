@@ -1,4 +1,22 @@
-"""Append a traceability record to the register. Called after test run."""
+"""Append a traceability record to the register after a test run.
+
+Inputs:
+  ARG  --story-id       Story identifier, e.g. PROT-101
+  ARG  --commit-sha     Full commit SHA
+  ARG  --author         Commit author (GITHUB_ACTOR or git user name)
+  ARG  --generated-dir  Root of generated output, e.g. generated/
+                        Must contain <story-id>/meta.json (written by the test-generation skill)
+  ARG  --report-dir     Directory containing <story-id>_report.json (written by run_tests.py)
+  ARG  --register       Path to traceability/register.json (created if absent)
+
+Outputs:
+  FILE traceability/register.json — record appended with schema:
+       {story_id, commit_sha, author, feature_file_path, test_script_path,
+        execution_report: {passed, failed, environment, timestamp, output},
+        gate_result: {status, reason}, appended_at}
+  exit 0 — record appended successfully
+  exit 1 — meta.json or report JSON not found
+"""
 import argparse
 import json
 import sys
@@ -16,7 +34,7 @@ def main():
     Append a traceability record to the register after a test run.
 
     Expected directory layout:
-      <generated-dir>/<story-id>/meta.json   — written by generate_tests.py
+      <generated-dir>/<story-id>/meta.json   — written by the test-generation skill
       <report-dir>/<story-id>_report.json    — written by run_tests.py
     """
     parser = argparse.ArgumentParser()

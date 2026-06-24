@@ -2,7 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 
-from src.domain.story_loader import parse_story_text
+from src.domain.story_parser import parse_story_text
 from src.domain.models import Story
 
 

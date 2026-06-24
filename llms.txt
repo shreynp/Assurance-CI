@@ -9,19 +9,29 @@
 - [DOMAIN](DOMAIN.md): Domain model — entities, aggregates, language
 - [SPEC](SPEC.md): Feature specifications and acceptance criteria
 - [CONTRIBUTING](CONTRIBUTING.md): Coding patterns and layer rules
-- [Architecture Decisions](docs/adr/README.md): ADR index
+- [AGENTS](AGENTS.md): Agent-facing rules — session protocol, architecture constraints, definition of done
+- [Architecture Decisions](docs/adr/README.md): ADR index (ADR-001 through ADR-004)
 - [Research Notes](docs/research/INDEX.md): Library research and security assessments
 - [Traceability Register](traceability/REGISTER.md): Current test results by story
-- [Demo Backlog](docs/DEMO_BACKLOG.md): All 23 demo stories
+- [Demo Backlog](docs/DEMO_BACKLOG.md): All 23 demo stories (PROT-101 – PROT-123)
+- [CI Architecture](docs/CI-ARCHITECTURE.md): How the GitHub Actions pipeline is structured
+- [Test Generation Pipeline](docs/TEST-GENERATION-PIPELINE.md): How Claude generates BDD tests from story context
+- [Troubleshooting](docs/TROUBLESHOOTING.md): Common CI and local failures with fixes
+- [Learnings](docs/LEARNINGS.md): Cross-session learnings captured by the retro agent
+- [Extending](docs/EXTENDING.md): How to add new story types, test runners, or integrations
+- [Adoption](docs/ADOPTION.md): Onboarding and rollout guidance
 
 ## Source Layout
 
-- `src/domain/` — pure domain functions (no I/O)
+- `src/domain/` — pure domain functions (no I/O): models, register, commit_parser, story_parser
+- `src/io/` — I/O adapters (story_loader); bridges domain and external file system
 - `src/dashboard/app.py` — Streamlit dashboard
-- `scripts/` — I/O scripts (Claude API, file reads/writes, register updates)
-- `tests/` — pytest-bdd features, step defs, unit tests
+- `scripts/` — I/O scripts: build_context.py, build_pr_body.py, fetch_jira_ticket.py, append_record.py, render_register.py, resolve_gate.py, run_tests.py, init.sh
+- `tests/` — pytest-bdd features, step defs, unit tests (test_domain.py, test_pipeline.py, test_build_context.py, test_error_paths.py)
 - `traceability/` — register.json, REGISTER.md, execution reports
 - `jira/` — Jira story markdown files (PROT-101 through PROT-123)
-- `.github/workflows/assurance.yml` — CI pipeline definition
-- `.claude/agents/` — subagent definitions
-- `.claude/skills/` — on-demand skill files
+- `.github/workflows/assurance.yml` — main CI pipeline (claude-code-action@v1, gate, PR body, traceability commit)
+- `.github/workflows/deploy-jira-pages.yml` — deploys jira/ stories as GitHub Pages for in-workflow fetching
+- `.claude/agents/` — subagent definitions: test-writer, docs-writer, research-assistant
+- `.claude/skills/test-generation/` — agentic skill invoked by CI to generate and run BDD tests
+- `.claude/skills/ship-it/` — agentic skill for staging, committing, and pushing changes

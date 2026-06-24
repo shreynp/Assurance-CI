@@ -35,9 +35,12 @@ from src.domain import StoryRun               # avoid
 ### GitHub Actions workflows
 When adding fallback `pip install` steps, verify every package name against the actual SDK import in the source file. The Anthropic SDK imports as `anthropic`, not `anthropic-sdk`.
 
-## Commit Messages
+## Commit Conventions
+
 Format: `[type]: [description]`
 Types: `feat` / `fix` / `docs` / `test` / `chore` / `ci`
+
+**Traceability commits must include `[skip ci]`** — the `assurance` job commits generated test files and register rows back to the repo mid-run. Without `[skip ci]`, that push triggers another pipeline run, creating a loop. The `append_record` and `render_register` git push steps already add this tag; preserve it if you edit those steps.
 
 ## Definition of Done
 1. `pytest tests/ -v` — run it, read the output, confirm green

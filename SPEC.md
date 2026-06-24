@@ -13,7 +13,7 @@ Tier: PROTOTYPE · Demo: 2026-06-23 (Monday) · Domain: see DOMAIN.md
 ## Core Flow
 1. Developer commits code with `PROT-101: ...` as the commit message and opens a PR
 2. GitHub Actions `assurance` job triggers — parses the story ID, loads the matching story file from `/jira/`
-3. Claude (Anthropic) receives the story acceptance criteria + the code diff → generates a `.feature` file (Gherkin test cases) + a runnable test script (pytest-bdd for API story, Playwright for UI stories)
+3. `build_context.py` assembles a structured context payload (changed symbols, type signatures, file contents, import graph, existing tests) from the diff — `claude-code-action@v1` invokes Claude via the `/test-generation` skill, passing the story acceptance criteria + the context payload → generates a `.feature` file (Gherkin test cases) + a runnable test script (pytest-bdd for API story, Playwright for UI stories)
 4. Generated tests run headlessly against the Protect AI codebase — execution report written regardless of result (`if: always()`)
 5. A new row is appended to the traceability register: story → commit → generated files → result
 6. `gate` job runs — any failed scenario = red status check, all passed = green
@@ -44,10 +44,19 @@ Tier: PROTOTYPE · Demo: 2026-06-23 (Monday) · Domain: see DOMAIN.md
 - Given the register shows a green result for PROT-101, When an approver follows the links in that row, Then they can open the feature file listing the test cases and the execution report confirming they passed
 
 ### F4: Story-keyed pipeline trigger
-**What it is:** The pipeline is triggered automatically from the commit message — no developer action beyond including the story ID.
+**What it is:** The pipeline is triggered automatically — no developer action beyond including the story ID. The story ID is extracted from four sources in priority order: workflow dispatch input → commit message → PR title → branch name.
 
 - Given a developer commits `PROT-101: add endpoint` and PROT-101 exists, When the commit is pushed and a PR is raised, Then the assurance pipeline starts automatically and loads PROT-101 as the source of truth for test generation
-- Given a developer commits `fix typo in README` (no story ID), When the commit is pushed, Then the assurance pipeline skips without error and writes no test files or register rows
+- Given no story ID is in the commit message but the PR title contains `PROT-101`, When the pipeline runs, Then PROT-101 is used as the story ID (PR title fallback)
+- Given a developer commits `fix typo in README` (no story ID in commit, PR title, or branch), When the commit is pushed, Then the assurance pipeline skips without error and writes no test files or register rows
+
+### F6: Agentic build context
+**What it is:** Before Claude generates tests, `build_context.py` assembles a structured context payload from the code diff — giving Claude the information it needs to generate tests that actually run (correct imports, real symbol names, real endpoint paths). This is what separates runnable tests from plausible-looking text.
+
+- Given a commit touches TypeScript/TSX files, When `build_context.py` runs, Then the context payload includes changed symbol names, their full type signatures, file imports, `'use client'`/`'use server'` directives, and diff excerpts — not empty fields
+- Given a commit touches Python files, When `build_context.py` runs, Then the context payload includes changed function/class names extracted via AST, their callers, and diff excerpts
+- Given co-located test files exist for changed files (`.test.ts`, `.spec.tsx`, `__tests__/`) or previously generated tests exist in `generated/$STORY_ID/`, When `build_context.py` runs, Then those test files are included in the context payload under `existing_tests`
+- Given a file is ≤200 lines, When `build_context.py` runs, Then the full file source is included in `file_contents` so Claude can see the complete implementation
 
 ### F5: Deploy gate
 **What it is:** A required status check on the PR — green unblocks merge, red blocks it. Any failed scenario = red. Simple logic; the visible signal stakeholders see.
@@ -119,10 +128,13 @@ Three stories against the existing Protect AI (`/Users/shreyas/Dev/protect`) AI-
 ---
 
 ## Supporting-Domain Stubs
-- **Simulated JIRA store**: three static story files in `/jira/PROT-101.md`, `PROT-102.md`, `PROT-103.md` — file reads only, no API
+- **Simulated JIRA store**: static story files in `/jira/PROT-NNN.md` — served via GitHub Pages (`https://shreynp.github.io/Assurance-CI`) in CI, read from disk locally; no live JIRA API
+- **Build context assembler**: `build_context.py` — extracts changed symbols, type signatures, imports, file contents, and existing tests from the diff; tree-sitter for TS/TSX/JS/JSX, Python AST for `.py`; pure data extraction, no generation logic
+- **Agentic generation step**: `claude-code-action@v1` running the `/test-generation` skill — invokes Claude with context payload + story acceptance criteria; max-turns 25; `continue-on-error: true` so the pipeline always reaches append/record
+- **PR body builder**: `build_pr_body.py` — renders a PR comment with gate result, test counts, RCA table (parsed from pytest `--tb=short`), and a Claude Haiku–generated plain-English RCA summary; Haiku call is best-effort (fails silently)
 - **Protect AI sample app**: existing Next.js app at `/Users/shreyas/Dev/protect` — used as test substrate; deliberate defects introduced only for red-gate validation, then reverted
 - **Markdown register renderer**: renders `traceability/register.json` as a committed `traceability/REGISTER.md` table — no logic, presentational only
-- **GitHub Actions plumbing**: `assurance` job (generate → run → record, with `if: always()` on report/register steps) + `gate` job (`needs: assurance`) — commodity YAML
+- **GitHub Actions plumbing**: `assurance` job (generate → run → record, with `continue-on-error` on agentic + gate steps) + `gate` job (`needs: assurance`) — commodity YAML
 
 ---
 

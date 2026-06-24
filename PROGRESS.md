@@ -1,5 +1,13 @@
 # Assurance CI — Progress
 
+## Current State ← read this first
+| | |
+|---|---|
+| Tests | 103 green (last verified 2026-06-24) |
+| Last session | 2026-06-24: RCA in PR report (Haiku-generated root cause in PR body) |
+| Blocker | none |
+| Next | — |
+
 ## Tier Declaration
 - **Tier**: PROTOTYPE
 - **Demo date**: 2026-06-23 (Monday)
@@ -17,7 +25,7 @@
 - 2026-06-21: Proto-implement — 66 tests green; all SPEC features covered
 - 2026-06-21: Proto-verify — all 66 tests green; dashboard verified at both viewports; 2 bugs fixed (register.json seeded from demo_records.json; CI workflow fallback SDK corrected openai→anthropic); VERIFIED
 - 2026-06-22: Agentic guide v7 compliance — 116 tests green; added AGENTS.md, CLAUDE.md @import, .claude/agents/ (research-assistant, test-writer, docs-writer), .claude/skills/ship-it/, .claude/hooks.json + hook scripts, .claude/mcp.json, scripts/init.sh, feature_list.json, docs/adr/ (3 ADRs), docs/research/INDEX.md, .github/copilot-instructions.md, llms.txt, CONTRIBUTING.md, .agent-audit/, ruff in pyproject.toml
-- 2026-06-23: claude-code-action@v1 migration — 142 tests green; Phase 1–4 of PLAN.md complete: scripts/build_context.py (18 tests), .claude/settings.json (allowlists + PostToolUse hook), .claude/skills/test-generation/SKILL.md (agentic orchestration skill), generator.py context dict params (36 tests), assurance.yml rewritten to use anthropics/claude-code-action@v1 (single step replaces get-diff + generate + run)
+- 2026-06-23: claude-code-action@v1 migration — Phase 1–4 of PLAN.md complete: scripts/build_context.py (18 tests), .claude/settings.json (allowlists + PostToolUse hook), .claude/skills/test-generation/SKILL.md (agentic orchestration skill), generator.py context dict params, assurance.yml rewritten to use anthropics/claude-code-action@v1 (single step replaces get-diff + generate + run)
 - 2026-06-23: CI debugging chain (5 fixes) — (1) removed push trigger from assurance.yml (claude-code-action@v1 only supports PR/issue-comment events); (2) bumped all actions to Node.js 24-compatible versions (checkout@v5, setup-python@v6, artifact@v5); (3) replaced head_commit context (push-only) with git log + PR_TITLE fallback; (4) fixed protect-ai workflow to clone Assurance-CI into assurance-ci/ and run scripts from there; (5) bulk-added parseable `- ACN:` bullet lines to all 22 jira files (parser requires this format, files only had bold `**ACN — Title**` prose headings)
 - 2026-06-23: PROT-105 learnings backport — 10 improvements from the live protect-ai run: (1) workflow_dispatch trigger + optional story_id input; (2) permissions: contents: write + pull-requests: write; (3) fetch-depth: 0 + token on checkout; (4) DISPATCH_STORY_ID override in story extraction; (5) Fetch Jira ticket step from GitHub Pages; (6) BASE_URL + TARGET_URL + JIRA_DIR env vars passed to claude-code-action; (7) [skip ci] on traceability commit; (8) continue-on-error on gate write + artifact download; (9) Build PR body + Create/update PR steps wired in; (10) test-generation skill: JIRA_DIR env var, httpx convention, env-var auth tokens, scenarios("{STORY_ID}.feature") naming rule
 - 2026-06-23: Agentic step hardening — three final changes synced from protect-ai live run: (1) test-generation skill removes auto-heal loop entirely — skill now reports failures and stops (Category A/B classification retained in comments but no fixing attempted); rationale: auto-heal consumed turns non-deterministically, masked real AC gaps, and made CI behaviour hard to explain; (2) assurance.yml agentic step set to max-turns 25 (up from default 10) to give Claude enough headroom for multi-file test generation without hitting the cap; (3) continue-on-error: true added to the agentic step so the pipeline always reaches append_record / PR comment even if Claude exits at max turns — failure evidence is preserved rather than swallowed
@@ -28,12 +36,13 @@
 ## What's built
 | Feature | Status | Tests |
 |---------|--------|-------|
-| F1 — AI test generation | ✅ Scripts + generator domain module + context dict path | 36 generator tests |
-| F2 — Test execution | ✅ run_tests.py (bugs fixed) | 5 execution parsing tests |
-| F3 — Traceability register | ✅ register.json + REGISTER.md + Streamlit dashboard | 6 register format tests |
-| F4 — Story-keyed trigger | ✅ assurance.yml + commit_parser | 7 trigger tests |
-| F5 — Deploy gate | ✅ resolve_gate.py | 8 gate tests |
+| F1 — AI test generation | ✅ Scripts + generator domain module + context dict path | — (test_generator.py not on this branch) |
+| F2 — Test execution | ✅ run_tests.py (bugs fixed) | 13 (parsing + edge cases + truncation) |
+| F3 — Traceability register | ✅ register.json + REGISTER.md + Streamlit dashboard | 13 (register domain + pipeline format) |
+| F4 — Story-keyed trigger | ✅ assurance.yml + commit_parser | 21 (extract + pipeline trigger + parser edge cases) |
+| F5 — Deploy gate | ✅ resolve_gate.py | 23 (gate result + deploy gate + error paths) |
 | F6 — Agentic CI loop | ✅ claude-code-action@v1 + /test-generation skill + build_context.py | 18 context tests |
+| **Total** | | **103** |
 
 ## Demo script (2026-06-23)
 **Open with the pain**: "Right now, when a developer ships assessment code, a QA manager has to read the PR, manually write test cases, run them, then paste results into a spreadsheet before an approver can sign off. That takes a day. Here's what happens instead."
