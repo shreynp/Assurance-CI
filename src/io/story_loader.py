@@ -1,9 +1,10 @@
 """I/O wrapper: read a story file and delegate parsing to the pure domain layer."""
 from __future__ import annotations
+
 from pathlib import Path
 
-from src.domain.story_parser import parse_story_text
 from src.domain.models import Story
+from src.domain.story_parser import parse_story_text
 
 
 def load_story(story_id: str, jira_dir: Path) -> Story:

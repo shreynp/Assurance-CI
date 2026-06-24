@@ -169,6 +169,7 @@ jobs:
             --model claude-sonnet-4-6
             --verbose
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           STORY_ID: ${{ steps.story.outputs.story_id }}
           BASE_URL: http://localhost:3000
           TARGET_URL: http://localhost:3000

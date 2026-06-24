@@ -1,5 +1,6 @@
 """Pure domain logic: extract story ID from a commit message."""
 from __future__ import annotations
+
 import re
 
 # Matches PROT-NNN story IDs only (e.g. "PROT-101", "PROT-202").

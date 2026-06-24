@@ -1,8 +1,9 @@
 """Pure story parsing — no I/O. File loading lives in src/io/story_loader.py."""
 from __future__ import annotations
-import re
-from .models import Story
 
+import re
+
+from .models import Story
 
 # Normalises the case-insensitive regex capture to canonical Literal values
 _TEST_TYPE_MAP = {

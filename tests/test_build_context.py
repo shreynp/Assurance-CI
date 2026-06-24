@@ -1,15 +1,11 @@
 """Unit tests for scripts/build_context.py — mocks subprocess, no git required."""
 from __future__ import annotations
 
-import ast
 import subprocess
-import textwrap
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
-
 import sys
+import textwrap
+from unittest.mock import patch
+
 sys.path.insert(0, ".")
 
 from scripts.build_context import (
@@ -19,7 +15,6 @@ from scripts.build_context import (
     context_type,
     find_callers,
 )
-
 
 # ---------------------------------------------------------------------------
 # changed_files

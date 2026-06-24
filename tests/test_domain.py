@@ -10,7 +10,6 @@ from src.domain.models import ExecutionReport, GateResult
 from src.domain.register import append_record, render_markdown
 from src.io.story_loader import load_story
 
-
 # --- commit_parser ---
 
 class TestExtractStoryId:

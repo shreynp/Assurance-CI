@@ -1,8 +1,10 @@
 """Append-only traceability register — pure domain logic for record serialisation."""
 from __future__ import annotations
+
 import json
 from dataclasses import asdict
 from pathlib import Path
+
 from .models import TraceabilityRecord
 
 

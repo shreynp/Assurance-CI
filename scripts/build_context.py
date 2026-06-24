@@ -224,8 +224,8 @@ def _ts_parser(filepath: str):
     if ext not in _JS_TS_EXTS:
         return None
     try:
-        from tree_sitter import Language, Parser
         import tree_sitter_typescript as _tsmod
+        from tree_sitter import Language, Parser
         lang = Language(_tsmod.language_tsx() if ext in (".tsx", ".jsx") else _tsmod.language_typescript())
         return Parser(lang)
     except Exception:

@@ -3,6 +3,7 @@ Tests for the full pipeline — F2 execution parsing, F3 register format,
 F4 story-keyed trigger, F5 gate resolution.
 All tests are pure-Python with no I/O to external services.
 """
+import importlib.util
 import json
 import subprocess
 import sys
@@ -14,7 +15,6 @@ import pytest
 from src.domain.commit_parser import extract_story_id, has_story_id
 from src.domain.models import ExecutionReport, GateResult, TraceabilityRecord
 from src.domain.register import append_record, render_markdown
-
 
 # ─── F4: Story-keyed pipeline trigger ──────────────────────────────────────
 
@@ -46,9 +46,9 @@ class TestPipelineTrigger:
             load_story("PROT-999", jira_dir)
 
 
+
 # ─── F2: Execution output parsing ──────────────────────────────────────────
 
-import importlib.util
 
 def _import_run_tests():
     spec = importlib.util.spec_from_file_location(

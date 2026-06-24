@@ -7,6 +7,7 @@
   so the assurance workflow doesn't re-trigger on subsequent pushes to that PR branch.
   **Permanent fix:** replace `secrets.GITHUB_TOKEN` in the `gh pr create` step with a dedicated
   PAT stored as `ACTIONS_PAT`. Documented in [docs/CI-ARCHITECTURE.md](docs/CI-ARCHITECTURE.md).
+- PR auto run disable/enable
 
 ## Backlog
 
