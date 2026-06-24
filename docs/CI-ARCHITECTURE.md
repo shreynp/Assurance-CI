@@ -57,7 +57,7 @@ Developer opens PR  OR  workflow_dispatch  OR  push to non-main (protect-ai)
     │     fetches ${JIRA_DATA_URL}/PROT-NNN.md from GitHub Pages
     │     writes to jira/ for downstream steps
     │
-    ├─ claude-code-action@v1                     ← agentic loop (max 10 turns)
+    ├─ claude-code-action@v1                     ← agentic loop (max 25 turns)
     │     prompt: "/test-generation"
     │     env: STORY_ID=PROT-101, JIRA_DIR=jira, BASE_URL=http://localhost:3000
     │     │
@@ -70,12 +70,16 @@ Developer opens PR  OR  workflow_dispatch  OR  push to non-main (protect-ai)
     │           3. Bash → build_context.py → /tmp/context.json
     │           4. Invoke test-writer sub-agent
     │                writes generated/PROT-101/PROT-101.feature
+    │                writes generated/PROT-101/conftest.py
     │                writes generated/PROT-101/test_PROT-101.py
     │                [PostToolUse hook: ruff formats each .py after Write]
     │           5. Bash → pytest generated/PROT-101/ -v --tb=short
-    │           6. On failure: Edit test → re-run (max 2 rounds)
-    │                [Playwright MCP available for UI test self-heal]
-    │           7. Stop — return control to workflow
+    │           6. On failure: classify each failure (Locator bug /
+    │                Implementation gap / Test infrastructure) →
+    │                write generated/PROT-101/gate_notes.md → STOP.
+    │                No auto-heal. No re-run. No edits.
+    │           7. Write generated/PROT-101/meta.json (always)
+    │           8. Stop — return control to workflow
     │
     ├─ append_record.py                          ← deterministic Python
     ├─ render_register.py                        ← deterministic Python
@@ -128,17 +132,20 @@ MCP tools (browser control, doc lookups, fetch) do not require separate allowlis
 
 ### Skills — `.claude/skills/test-generation/SKILL.md`
 
-One skill is invoked in CI. The `prompt: "/test-generation"` field in `assurance.yml` is the entry point. Claude reads the skill file from the checked-out repo and follows its 7-step protocol:
+One skill is invoked in CI. The `prompt: "/test-generation"` field in `assurance.yml` is the entry point. Claude reads the skill file from the checked-out repo and follows its 8-step protocol:
 
 1. Read the Jira story file (`${JIRA_DIR:-jira}/$STORY_ID.md`)
 2. Resolve `DOMAIN.md` for ubiquitous language grounding
 3. Run `build_context.py` → structured JSON (changed files, AST-level symbols, callers, diff excerpts)
 4. Invoke the `test-writer` sub-agent with combined context
 5. Run pytest against generated output
-6. Self-heal on failure (max 2 rounds)
-7. Stop — downstream steps handle traceability
+6. On failure: classify each failure as Locator bug / Implementation gap / Test infrastructure → write `generated/$STORY_ID/gate_notes.md` → stop. **No auto-heal. No re-runs.**
+7. Write `generated/$STORY_ID/meta.json` (always, regardless of pass/fail — required by `append_record.py`)
+8. Stop — downstream steps handle traceability
 
 The skill enforces two hard constraints: never modify `src/domain/`, and write only to `generated/$STORY_ID/`.
+
+> **Why no auto-heal?** Auto-heal consumed turns non-deterministically, masked real AC gaps (a broken implementation could pass after test adjustments), and made CI behaviour hard to reason about. Failures are now classified and surfaced cleanly so the developer understands what broke and why.
 
 **Generated test conventions** (enforced from PROT-105 live-run learnings):
 - `scenarios()` must reference `"{STORY_ID}.feature"` by filename — never a generic name
@@ -213,15 +220,41 @@ Replaces the old raw `git diff HEAD~1 HEAD` dump (8 k cap, unstructured). Produc
 
 ```json
 {
-  "changed_files": ["src/domain/generator.py"],
-  "changed_symbols": {"src/domain/generator.py": ["build_feature_prompt"]},
-  "callers": {"scripts/generate_tests.py": ["build_feature_prompt"]},
-  "context_type": "backend",
-  "diff_excerpts": {"src/domain/generator.py": "...targeted diff lines..."}
+  "changed_files": ["components/completeness-ring.tsx", "app/api/assessment/route.ts"],
+  "changed_symbols": {
+    "components/completeness-ring.tsx": ["CompletenessRingProps", "RADIUS", "CIRCUMFERENCE", "CompletenessRing"],
+    "app/api/assessment/route.ts": ["GET", "POST"]
+  },
+  "callers": {
+    "app/api/assessment/route.test.ts": ["route"]
+  },
+  "context_type": "both",
+  "diff_excerpts": {
+    "components/completeness-ring.tsx": "...targeted diff lines...",
+    "app/api/assessment/route.ts": "...targeted diff lines..."
+  }
 }
 ```
 
 `context_type` routes test strategy: `"ui"` → always Playwright; `"backend"` → pytest-bdd; `"both"` → both.
+
+### Language support
+
+The script uses two AST backends:
+
+| Files | Parser | Symbols extracted |
+|-------|--------|-------------------|
+| `.py` | `ast` (stdlib) | Top-level `def`, `async def`, `class` at `col_offset == 0` |
+| `.ts`, `.tsx`, `.js`, `.jsx` | `tree-sitter` + `tree-sitter-typescript` | Top-level `function_declaration`, `class_declaration`, `lexical_declaration`, `export_statement`, `interface_declaration`, `type_alias_declaration`, `enum_declaration` |
+
+**Caller detection** for TS/TSX files matches by file stem against `import_statement` string nodes in the tree-sitter AST (e.g. `import ... from './completeness-ring'` → stem `completeness-ring`). Falls back to regex text scan if tree-sitter is unavailable.
+
+**`context_type` classifier** detects:
+- `"ui"` — any path containing `dashboard`, `components`, or `app`
+- `"backend"` — any path containing `domain`, `scripts`, `api`, or `lib`
+- `"both"` — both signal types present
+
+**Dependencies**: `tree-sitter>=0.21.0` and `tree-sitter-typescript>=0.21.0` are declared in `pyproject.toml` and installed via `pip install -e "assurance-ci/[dev]"` in the CI workflow. If import fails (e.g. old environment), the TS functions return empty lists gracefully — no crash.
 
 ---
 
@@ -236,9 +269,9 @@ Replaces the old raw `git diff HEAD~1 HEAD` dump (8 k cap, unstructured). Produc
 | Approach | Model | Calls | Estimated cost/run |
 |----------|-------|-------|--------------------|
 | Old (fixed SDK calls) | Opus | 2 fixed | ~$0.50–1.00 |
-| New (agentic loop) | Sonnet | 3–10 turns | ~$0.10–0.50 |
+| New (agentic loop) | Sonnet | 3–25 turns | ~$0.10–0.50 |
 
-Self-healing on the first attempt avoids a full re-run of the workflow (~6 min) at the cost of 1–2 additional turns (~$0.05).
+The agentic step runs with `max-turns: 25` and `continue-on-error: true`. If Claude hits the turn cap, the pipeline does not fail — it continues to append_record and PR comment so evidence is preserved. Failures inside the agentic loop are classified and written to `gate_notes.md`; no auto-healing is attempted.
 
 ---
 

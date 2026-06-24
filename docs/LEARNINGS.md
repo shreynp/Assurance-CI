@@ -2,6 +2,41 @@
 
 ---
 
+## 2026-06-24 — build_context.py was TS-blind (PROT-112 post-mortem)
+
+**Root cause discovered via live CI run**
+PROT-112 run #28041461751 returned `changed_symbols: {}`, `callers: {}`, and `diff_excerpts: {}` despite 7 changed files. The script called `changed_files()` correctly but all 7 paths had `.ts` / `.tsx` extensions — the Python `ast` module doesn't parse those, so every AST step was silently skipped and the skill received a context with only `changed_files` populated. Generated tests had no knowledge of *what* changed inside the files.
+
+**Fix: full tree-sitter AST for TS/TSX/JS/JSX**
+Added `_ts_parser()`, `_ts_decl_name()`, `changed_symbols_ts()`, and `find_ts_callers()` to `build_context.py`. Uses `tree-sitter>=0.21.0` + `tree-sitter-typescript>=0.21.0` (added to `pyproject.toml`). The `build()` function now splits changed files into `py_files` and `ts_files` and runs the appropriate backend for each.
+
+**Symbols now extracted for TS/TSX**: `function_declaration`, `class_declaration`, `lexical_declaration` (arrow functions / `const X = ...`), `export_statement`, `interface_declaration`, `type_alias_declaration`, `enum_declaration` — resolved via child node traversal since tree-sitter node types differ from Python's `ast`.
+
+**Caller detection for TS**: matches by file *stem* against `import_statement` string literal nodes in the tree-sitter AST. Reason: TS imports use relative paths (`from './completeness-ring'`), not module names, so stem matching is the right heuristic. Regex text scan fallback if tree-sitter is unavailable.
+
+**Verified against PROT-112**: commit range `781c117..0b66cae` now produces 10 symbols across 5 TS/TSX files, 2 caller entries, and diff excerpts for all 6 changed TS files.
+
+**Rule for future CI context builders:** always confirm AST coverage covers the actual language mix of the target repo before the first live run. A context builder that returns `{}` for non-Python files fails silently — there's no error, just empty context passed to the agent.
+
+---
+
+## 2026-06-23 — Agentic step hardening (afternoon)
+
+Three decisions made after watching the prototype run end-to-end:
+
+**Remove auto-heal from the test-generation skill**
+The skill previously attempted to fix failing tests (Category A) by editing them and re-running pytest, up to 2 rounds. This was removed. The skill now classifies failures (Locator bug / Implementation gap / Test infrastructure) and stops. Reason: auto-heal consumed turns non-deterministically, could silently paper over real AC gaps, and made it hard to explain why a CI run succeeded or failed. Failures are now surfaced explicitly in `gate_notes.md`. If a test is genuinely wrong, the developer fixes it in code — the skill's job is to generate and report, not to repair.
+
+**Raise `max-turns` to 25**
+The `claude-code-action@v1` call was running with the default turn cap (~10). Multi-file test generation (`.feature` + `conftest.py` + `test_*.py` + `meta.json` + running pytest) reliably needed more turns than the cap allowed. Raised to 25. If Claude still hits the cap, the pipeline continues (see below) and the partial output is preserved.
+
+**Add `continue-on-error: true` to the agentic step**
+Without this, a max-turns exit or unexpected Claude error killed the pipeline before `append_record.py` and the PR comment ran — leaving no evidence for the developer. With `continue-on-error`, the pipeline always reaches reporting. The `gate` job handles a missing `gate.json` by passing (no story = no gate).
+
+**Rule for future agentic CI steps:** set `max-turns` to at least 2× the number of distinct file writes plus tool reads you expect. Add `continue-on-error: true` so the pipeline always reaches its reporting tail even when the agentic step doesn't finish cleanly.
+
+---
+
 ## 2026-06-23 — PROT-105 Live CI Run (protect-ai backport)
 
 Ten improvements discovered running the pipeline against the real protect-ai repo for story PROT-105. All were backported to `assurance.yml` and the test-generation skill.
