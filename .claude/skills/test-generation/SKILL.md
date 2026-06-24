@@ -43,16 +43,21 @@ test -f DOMAIN.md && echo "exists" || echo "missing"
 ### 3 — Build incremental context
 
 ```bash
-python scripts/build_context.py --base HEAD~1 --head HEAD --output /tmp/context.json
+python scripts/build_context.py --base HEAD~1 --head HEAD --output /tmp/context.json --story-id $STORY_ID
 cat /tmp/context.json
 ```
 
 Read the resulting JSON:
 - `changed_files` — files touched in this commit
-- `changed_symbols` — top-level names that changed (AST-level)
-- `callers` — first-level importers of changed modules
+- `changed_symbols` — top-level names that changed (AST-level), for both Python and TS/TSX
+- `symbol_signatures` — full function/type signatures for each changed symbol (including TypeScript type annotations and return types)
+- `callers` — first-level importers of changed modules (scans `app/`, `components/`, `lib/`, `hooks/`, `src/`, etc.)
 - `context_type` — `"backend"`, `"ui"`, or `"both"`
-- `diff_excerpts` — targeted diff lines
+- `diff_excerpts` — targeted diff lines per changed file
+- `file_contents` — full source text of changed files under 200 lines (gives the model complete function bodies, not just the diff)
+- `file_imports` — import specifiers declared inside each changed file (reveals dependencies that may need mocking)
+- `file_directives` — `'use client'` / `'use server'` directives per TS/TSX file (determines whether a file is a React Client Component, Server Component, or API route)
+- `existing_tests` — content of any co-located `.test.ts` / `.spec.tsx` / `__tests__/` files and previously generated tests for `$STORY_ID` in `generated/$STORY_ID/`
 
 ### 4 — Invoke the test-writer agent
 
@@ -63,10 +68,15 @@ Story: <story title + acceptance criteria>
 DOMAIN context (if DOMAIN.md present): <ubiquitous language table + entity field definitions>
 Build context:
   changed_files: <list>
-  changed_symbols: <dict>
-  callers: <dict>
+  changed_symbols: <dict>           # symbol names per file
+  symbol_signatures: <dict>         # full type signatures per symbol — use these to know exact inputs/outputs to test
+  callers: <dict>                   # files that import changed modules
   context_type: <backend|ui|both>
   diff_excerpts: <dict>
+  file_contents: <dict>             # full source for small files — read before writing assertions
+  file_imports: <dict>              # what each changed file imports — identify what to mock
+  file_directives: <dict>           # 'use client'/'use server' — determines component type and test strategy
+  existing_tests: <dict>            # extend these rather than generating from scratch if present
 
 Write output to: generated/$STORY_ID/
   - generated/$STORY_ID/$STORY_ID.feature    (Gherkin)

@@ -60,7 +60,7 @@ jobs:
         run: |
           pip install -e "assurance-ci/[dev]" 2>/dev/null || pip install \
             anthropic httpx pytest pytest-bdd playwright pytest-playwright \
-            python-dotenv pydantic
+            python-dotenv pydantic tree-sitter tree-sitter-typescript
 
       - name: Install Playwright browsers
         run: playwright install chromium --with-deps

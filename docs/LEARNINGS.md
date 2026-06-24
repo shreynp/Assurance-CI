@@ -2,6 +2,26 @@
 
 ---
 
+## 2026-06-24 — Richer build context for TS/TSX projects
+
+Five fields added to `context.json` after observing that the test-writer was generating tests that didn't match the actual function signatures, couldn't identify what to mock, and occasionally conflicted with existing tests:
+
+**`symbol_signatures`** — the gap between having a name (`GET`) and knowing the contract (`async function GET(req: NextRequest): Promise<NextResponse<Summary>>`) is the difference between a vague test and a precise one. Extract up to the body node boundary, not the opening `{`.
+
+**`file_contents`** — diff lines alone are misleading: they show what changed but not what the function returns, how errors are handled, or what the surrounding code does. Full source (≤200 lines) gives the model the complete picture. 200-line threshold keeps token cost bounded.
+
+**`file_imports`** — test writers need to know what the changed file imports to decide what to mock. `from '@/stores/assessment'` tells you a store mock is needed; `from 'next/server'` tells you a `NextResponse` mock may be needed. This is not in the diff at all if the imports didn't change.
+
+**`file_directives`** — `'use client'` / `'use server'` in Next.js files are not surfaced by symbol extraction or diffs unless the directive itself was added in this commit. A component marked `'use client'` must be tested with Playwright (browser DOM); a route without a directive is a Server Component or API handler requiring HTTP testing. This signal was previously invisible to the test-writer.
+
+**`existing_tests`** — when `generated/PROT-NNN/` already exists from a prior run, the test-writer should extend it rather than regenerate from scratch. Co-located `.test.ts` / `__tests__/` files let the model match the project's established test patterns (fixture names, assertion style, import aliases).
+
+**TS search scope fix** — `find_ts_callers` previously scanned only `src/` and `scripts/`, which are empty in most Next.js projects. The split into `_TS_SEARCH_ROOTS` (covering `app/`, `components/`, `lib/`, `hooks/`, etc.) and `_SEARCH_ROOTS` (Python-only) means caller detection now works for the actual target repo layout.
+
+**Rule**: whenever the test-writer starts with an empty context for TS files, check `_TS_SEARCH_ROOTS` first — it's the most common silent failure mode.
+
+---
+
 ## 2026-06-24 — build_context.py was TS-blind (PROT-112 post-mortem)
 
 **Root cause discovered via live CI run**

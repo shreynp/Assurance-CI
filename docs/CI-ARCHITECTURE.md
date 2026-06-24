@@ -238,6 +238,28 @@ Replaces the old raw `git diff HEAD~1 HEAD` dump (8 k cap, unstructured). Produc
 
 `context_type` routes test strategy: `"ui"` → always Playwright; `"backend"` → pytest-bdd; `"both"` → both.
 
+### Output schema
+
+```json
+{
+  "changed_files": ["app/api/assessment/route.ts", "components/completeness-ring.tsx"],
+  "changed_symbols": { "components/completeness-ring.tsx": ["CompletenessRing", "CompletenessRingProps"] },
+  "symbol_signatures": {
+    "components/completeness-ring.tsx": {
+      "CompletenessRing": "export const CompletenessRing: React.FC<CompletenessRingProps> = ({ percentage, size = 120 })",
+      "CompletenessRingProps": "export interface CompletenessRingProps { percentage: number; size?: number; }"
+    }
+  },
+  "callers": { "app/assessment/page.tsx": ["completeness-ring"] },
+  "context_type": "both",
+  "diff_excerpts": { "components/completeness-ring.tsx": "...diff..." },
+  "file_contents": { "app/api/assessment/route.ts": "...full source (≤200 lines)..." },
+  "file_imports": { "components/completeness-ring.tsx": ["react", "@/lib/utils", "./types"] },
+  "file_directives": { "components/completeness-ring.tsx": ["use client"] },
+  "existing_tests": { "components/completeness-ring.test.tsx": "...content..." }
+}
+```
+
 ### Language support
 
 The script uses two AST backends:
@@ -247,14 +269,32 @@ The script uses two AST backends:
 | `.py` | `ast` (stdlib) | Top-level `def`, `async def`, `class` at `col_offset == 0` |
 | `.ts`, `.tsx`, `.js`, `.jsx` | `tree-sitter` + `tree-sitter-typescript` | Top-level `function_declaration`, `class_declaration`, `lexical_declaration`, `export_statement`, `interface_declaration`, `type_alias_declaration`, `enum_declaration` |
 
-**Caller detection** for TS/TSX files matches by file stem against `import_statement` string nodes in the tree-sitter AST (e.g. `import ... from './completeness-ring'` → stem `completeness-ring`). Falls back to regex text scan if tree-sitter is unavailable.
+**`symbol_signatures`** — for each changed symbol, the full signature text up to (not including) the function body. For TypeScript this preserves type annotations and return types; for Python it includes parameter annotations and `->` return type. Interfaces and type aliases include their full body if ≤300 chars.
+
+**`file_contents`** — full source text of changed files with ≤200 lines. Gives the model complete function bodies and surrounding context rather than only the `+` lines from the diff.
+
+**`file_imports`** — import specifiers declared at the top of each changed file (`import_statement` nodes in TS, `ast.Import`/`ast.ImportFrom` in Python). Tells the test-writer which dependencies may need mocking.
+
+**`file_directives`** — `'use client'` / `'use server'` directives extracted from the first non-import statements in each TS/TSX file. Determines the Next.js component type and therefore the test strategy: `'use client'` → Playwright DOM test; no directive or `'use server'` on a route → HTTP test.
+
+**`existing_tests`** — co-located test files (`.test.ts`, `.spec.tsx`, `__tests__/`) for changed modules, plus all files from `generated/$STORY_ID/` when `--story-id` is passed. The test-writer extends these rather than generating from scratch.
+
+**Caller detection** for TS/TSX files matches by file stem against `import_statement` string nodes (e.g. `from './completeness-ring'` → stem `completeness-ring`). Falls back to regex text scan if tree-sitter is unavailable. Scans `_TS_SEARCH_ROOTS` which covers the Next.js App Router layout:
+
+```python
+_TS_SEARCH_ROOTS = ("src", "app", "components", "lib", "hooks", "stores", "types", "utils", "pages", "features")
+```
+
+Python caller detection uses `_SEARCH_ROOTS = ("src", "scripts")`.
 
 **`context_type` classifier** detects:
 - `"ui"` — any path containing `dashboard`, `components`, or `app`
 - `"backend"` — any path containing `domain`, `scripts`, `api`, or `lib`
 - `"both"` — both signal types present
 
-**Dependencies**: `tree-sitter>=0.21.0` and `tree-sitter-typescript>=0.21.0` are declared in `pyproject.toml` and installed via `pip install -e "assurance-ci/[dev]"` in the CI workflow. If import fails (e.g. old environment), the TS functions return empty lists gracefully — no crash.
+**`--story-id` flag** — when passed, `_find_existing_tests()` also scans `generated/<story-id>/` for previously generated `.feature`, `.py`, and `.ts` files so the agent can extend rather than regenerate.
+
+**Dependencies**: `tree-sitter>=0.21.0` and `tree-sitter-typescript>=0.21.0` in `pyproject.toml`, installed via `pip install -e "assurance-ci/[dev]"`. If import fails, TS functions return empty gracefully — no crash.
 
 ---
 

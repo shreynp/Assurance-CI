@@ -181,7 +181,12 @@ class TestBuild:
         assert set(result.keys()) == {
             "changed_files",
             "changed_symbols",
+            "symbol_signatures",
             "callers",
             "context_type",
             "diff_excerpts",
+            "file_contents",
+            "file_imports",
+            "file_directives",
+            "existing_tests",
         }
