@@ -14,7 +14,92 @@ Optional env var:
 import argparse
 import json
 import os
+import re
 from pathlib import Path
+
+
+def parse_failures(output: str) -> list[dict]:
+    """Extract per-test failure summaries from pytest --tb=short output.
+
+    Returns a list of dicts with keys:
+      - test:   short test identifier (file::test_name)
+      - reason: one-line exception message from the summary section
+      - detail: first assertion/error lines from the failure block (may be empty)
+    """
+    failures = []
+
+    # 1. Parse "short test summary info" section for the one-liner per failure.
+    for m in re.finditer(r"^FAILED (.+?) - (.+)$", output, re.MULTILINE):
+        test_path = m.group(1).strip()
+        reason = m.group(2).strip()
+        # Drop generated/STORY_ID/ prefix so the table stays readable.
+        short_name = re.sub(r"^generated/[^/]+/", "", test_path)
+        failures.append({"test": short_name, "reason": reason, "detail": ""})
+
+    if not failures:
+        return failures
+
+    # 2. Augment with the first `E ` assertion lines from each failure block.
+    #    Blocks are delimited by lines of underscores.
+    block_header_re = re.compile(r"^_{5,} (.+?) _{5,}$", re.MULTILINE)
+    blocks: list[tuple[str, str]] = []
+    headers = list(block_header_re.finditer(output))
+    for i, h in enumerate(headers):
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(output)
+        blocks.append((h.group(1).strip(), output[h.end():end]))
+
+    # Match blocks back to failures by test name (last component).
+    for failure in failures:
+        test_fn = failure["test"].split("::")[-1]
+        for block_name, block_body in blocks:
+            if test_fn in block_name:
+                error_lines = [
+                    line[1:].strip()  # strip leading "E"
+                    for line in block_body.splitlines()
+                    if line.startswith("E ")
+                ]
+                if error_lines:
+                    # Keep at most 3 lines to stay "brief".
+                    failure["detail"] = " · ".join(error_lines[:3])
+                break
+
+    return failures
+
+
+def generate_worded_rca(failures: list[dict]) -> str:
+    """Call Claude Haiku to produce a brief natural-language RCA paragraph.
+
+    Returns an empty string if the API key is absent or the call fails — the
+    table-only RCA is always rendered regardless.
+    """
+    try:
+        import anthropic
+
+        failure_text = "\n".join(
+            f"- {f['test']}: {f['reason']}"
+            + (f" — {f['detail']}" if f["detail"] else "")
+            for f in failures
+        )
+        client = anthropic.Anthropic()
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "You are a QA engineer writing a root cause analysis for a CI report. "
+                        "Summarize the following test failures in 2–3 concise sentences. "
+                        "Focus on the likely root cause, not just restating what failed. "
+                        "Be specific and actionable. Do not use bullet points.\n\n"
+                        f"Failed tests:\n{failure_text}"
+                    ),
+                }
+            ],
+        )
+        return msg.content[0].text.strip()
+    except Exception:
+        return ""
 
 
 def main():
@@ -71,6 +156,28 @@ def main():
         f"| ❌ Failed | **{failed}** |",
         "",
     ]
+
+    failures = parse_failures(output) if failed > 0 else []
+    if failures:
+        lines += [
+            "### Root Cause Analysis",
+            "",
+            "| Test | Failure | Detail |",
+            "|:-----|:--------|:-------|",
+        ]
+        for f in failures:
+            test = f["test"].replace("|", "\\|")
+            reason = f["reason"].replace("|", "\\|")
+            detail = (f["detail"] or "—").replace("|", "\\|")
+            lines.append(f"| `{test}` | `{reason}` | {detail} |")
+        lines.append("")
+
+        worded = generate_worded_rca(failures)
+        if worded:
+            lines += [
+                "> **Summary**: " + worded.replace("\n", " "),
+                "",
+            ]
 
     if output.strip():
         lines += [

@@ -87,8 +87,11 @@ Developer opens PR  OR  workflow_dispatch  OR  push to non-main (protect-ai)
     │     [pre-commit.sh: secrets check + domain purity check]
     │     commit message includes [skip ci] to prevent re-triggering the pipeline
     ├─ resolve_gate.py → /tmp/gate.json          ← deterministic Python (continue-on-error)
-    ├─ build_pr_body.py → /tmp/pr_body.md        ← deterministic Python
-    │     renders gate status, AC coverage, and story link into PR markdown
+    ├─ build_pr_body.py → /tmp/pr_body.md        ← deterministic Python + Claude Haiku
+    │     renders gate status, test results, and story link into PR markdown;
+    │     when failures > 0: parses pytest --tb=short output into an RCA table
+    │     (test name, one-line exception, assertion detail) and appends a
+    │     Claude Haiku-generated plain-English RCA summary as a blockquote
     └─ gh pr create / gh pr comment              ← deterministic shell
           creates PR if none exists; comments assurance report on existing PR
     │
@@ -195,7 +198,7 @@ Variables injected by `assurance.yml` into the agentic step and downstream scrip
 | `TEST_BEARER_TOKEN` | `valid-test-token` | CI | Auth token for authenticated endpoint tests; real value injected from secrets |
 | `JIRA_DATA_URL` | `https://shreynp.github.io/Assurance-CI` | CI | GitHub Pages base URL for `fetch_jira_ticket.py` |
 | `DISPATCH_STORY_ID` | — | `workflow_dispatch` input | Overrides commit-message detection when set via manual trigger |
-| `ANTHROPIC_API_KEY` | — | Secret (required) | API key for the `claude-code-action@v1` agentic loop |
+| `ANTHROPIC_API_KEY` | — | Secret (required) | API key for the `claude-code-action@v1` agentic loop and the `build_pr_body.py` RCA summary call |
 
 ---
 
@@ -208,9 +211,46 @@ Variables injected by `assurance.yml` into the agentic step and downstream scrip
 | `append_record.py` | Workflow step | Appends a traceability record to `traceability/register.json` |
 | `render_register.py` | Workflow step | Renders `register.json` → `REGISTER.md` markdown table |
 | `resolve_gate.py` | Workflow step | Reads `register.json` and writes pass/fail decision to `/tmp/gate.json` |
-| `build_pr_body.py` | Workflow step | Renders gate status, AC coverage, and story link into `/tmp/pr_body.md` for PR creation |
+| `build_pr_body.py` | Workflow step | Renders gate status, test results, RCA table, and AI-generated RCA summary into `/tmp/pr_body.md` for PR creation |
 | `generate_tests.py` | Local / legacy | Direct SDK test generation (pre-agentic; kept for local dev fallback) |
 | `run_tests.py` | Local / legacy | Runs generated tests and prints results |
+
+---
+
+## PR Body Builder — `scripts/build_pr_body.py`
+
+Produces `/tmp/pr_body.md` for `gh pr create` / `gh pr comment`. When `failed > 0` it adds a **Root Cause Analysis** section with two layers:
+
+### 1. RCA table (static, no API cost)
+
+Parsed from the pytest `--tb=short` output already stored in `{story_id}_report.json`:
+
+| Column | Source |
+|--------|--------|
+| **Test** | `FAILED path - …` summary line, with `generated/STORY_ID/` prefix stripped |
+| **Failure** | One-line exception message from the same summary line |
+| **Detail** | First ≤3 `E ` assertion lines from the matching failure block, joined with ` · ` |
+
+### 2. AI-generated summary (Claude Haiku)
+
+After the table, a `> **Summary**: …` blockquote is rendered. `generate_worded_rca()` calls `claude-haiku-4-5-20251001` with the structured failure list and asks for a 2–3 sentence root cause summary focused on _why_ (not just _what_) failed, with an actionable recommendation.
+
+- Requires `ANTHROPIC_API_KEY` in the `Build PR body` workflow step env
+- Falls back silently (blockquote omitted) if the key is absent or the call fails — the table is always rendered
+
+### Example PR output (failures present)
+
+```markdown
+### Root Cause Analysis
+
+| Test | Failure | Detail |
+|:-----|:--------|:-------|
+| `test_export.py::test_csv_download` | `AssertionError: HTTP 404` | assert response.status_code == 200 |
+
+> **Summary**: All three failures share a common root cause — the CSV export route
+> is not registered in the Next.js app router, returning 404 for every request.
+> Register the route handler at `app/api/export/route.ts` and re-run.
+```
 
 ---
 
